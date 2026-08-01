@@ -1,0 +1,334 @@
+# Live MCP — Kiến Trúc Tổng Quan & Chi Tiết Kỹ Thuật Triển Khai
+
+> Tài liệu cho developer tự triển khai hệ thống Live MCP. Đọc kèm `livemcp-declarative-spec.md`
+> (đặc tả chuẩn khai báo mà trang web phải tuân theo).
+
+---
+
+## 1. Bức tranh toàn cảnh
+
+Hệ thống gồm **3 thành phần**, trang web đạt chuẩn là thành phần thứ 4 (do bên thứ ba xây, theo spec):
+
+```mermaid
+graph LR
+    subgraph "AI Agents"
+        A1["Claude Desktop / Claude Code"]
+        A2["Agent MCP-compatible khác"]
+    end
+
+    subgraph "Live MCP Local Server (Node.js)"
+        MCPL["MCP Endpoint<br/>(stdio + Streamable HTTP)"]
+        SESS["Session Manager<br/>(mỗi tab = 1 tool-namespace)"]
+        PARSE["Declarative Parser<br/>→ MCP Tool Schemas"]
+        BRIDGE["Extension Bridge<br/>(WebSocket Hub, port 8787)"]
+    end
+
+    subgraph "Live MCP Chrome Extension (MV3)"
+        SW["Service Worker<br/>(WS client + CDP điều khiển)"]
+        CSC["Content Script<br/>(Scanner + MutationObserver)"]
+        BEE["Bee Overlay 🐝<br/>(visual feedback)"]
+    end
+
+    WEB["Trang web chuẩn Live MCP<br/>(livemcp-* attributes)"]
+
+    A1 -- "MCP protocol" --> MCPL
+    A2 -- "MCP protocol" --> MCPL
+    MCPL --> SESS --> PARSE
+    SESS <--> BRIDGE
+    BRIDGE <-- "WebSocket ws://127.0.0.1:8787" --> SW
+    SW <--> CSC
+    SW -- "chrome.debugger (CDP)<br/>trusted mouse/keyboard" --> WEB
+    CSC -- "quét + observe DOM" --> WEB
+    CSC --> BEE
+```
+
+**Phân vai ngắn gọn:**
+
+| Thành phần | Trách nhiệm | KHÔNG làm gì |
+|---|---|---|
+| **Local Server** | Nói chuyện MCP với agent; dịch declarative → tool; định tuyến lệnh; giữ vòng đời session; chặn hành động `livemcp-confirm` chờ user duyệt | Không đụng DOM, không biết cách click |
+| **Extension SW** | Kết nối WS tới server; thi hành hành động qua CDP; quản lý tab | Không parse schema, không nói MCP |
+| **Content Script** | Quét declarative, observe mutation, tính toạ độ, đọc kết quả/resource, điều khiển con ong | Không tự thi hành click/type thật (việc của CDP) |
+| **Trang web** | Khai báo đúng spec, cập nhật `livemcp-state` | Không cần biết Live MCP tồn tại lúc runtime — chỉ là HTML |
+
+---
+
+## 2. Quyết định kiến trúc quan trọng (đọc kỹ trước khi code)
+
+### 2.1 Giả lập input phải qua `chrome.debugger` (CDP) — đây là quyết định số 1
+
+Sự kiện tạo bằng `element.dispatchEvent(new MouseEvent(...))` có `isTrusted: false`. Web app hiện đại (React synthetic events vẫn nhận, nhưng focus/selection/default action của browser thì không), và triết lý dự án là "tương tác y như con người" → **bắt buộc dùng trusted events**:
+
+- Extension attach `chrome.debugger` vào tab, dùng CDP:
+  - `Input.dispatchMouseEvent` (mousePressed/mouseReleased/mouseMoved, button left/right, clickCount) — click, double click, drag, hover, scroll (`Input.dispatchMouseEvent type=mouseWheel`).
+  - `Input.dispatchKeyEvent` + `Input.insertText` — gõ phím thật, phím tắt, Enter/Tab.
+- Đây chính là cơ chế Playwright/Puppeteer dùng → hành vi đạt chuẩn "như con người" đã được chứng minh.
+- **Đánh đổi phải chấp nhận:** Chrome hiện banner "LiveMCP is debugging this browser" khi debugger attach. Không có cách hợp lệ nào tắt banner — ghi rõ trong tài liệu người dùng, coi đó là *tính năng minh bạch* (user biết agent đang điều khiển).
+- Permission cần trong manifest: `"debugger"`, `"tabs"`, `"scripting"`, host permissions theo site user cho phép.
+- Attach lười: chỉ attach khi có phiên agent hoạt động, detach khi phiên kết thúc (banner biến mất).
+
+### 2.2 Tọa độ là ngôn ngữ chung của hành động
+
+CDP dispatch theo **tọa độ viewport**, không theo selector. Content script chịu trách nhiệm: tìm element theo `livemcp-name`/`livemcp-arg` → `scrollIntoViewIfNeeded` → `getBoundingClientRect()` → trả tọa độ tâm (hoặc điểm trong `livemcp-region` với canvas) → SW dispatch CDP tại tọa độ đó. Nhờ vậy click canvas và click DOM là **cùng một code path**.
+
+### 2.3 MV3 Service Worker chết sau ~30s idle — phải thiết kế quanh nó
+
+- Giữ WS sống: từ Chrome 116+, mọi hoạt động WebSocket reset timer SW → server gửi ping mỗi 20s là đủ giữ SW sống khi có phiên hoạt động.
+- Vẫn phải code theo kiểu **stateless-recoverable**: mọi state phiên (tab nào đang pair, tool list đã gửi chưa) lưu `chrome.storage.session`; SW dậy lại → đọc storage → reconnect WS → resync.
+- Content script mới là nơi giữ state DOM (registry declarative của trang) vì nó sống cùng trang.
+
+### 2.4 Một tab = một MCP "sub-server" (namespace)
+
+Agent kết nối **một** Local Server duy nhất. Mỗi tab chuẩn Live MCP khi được phát hiện sẽ tạo một *namespace* tool: `bookmytable__book_table`, `shopviet__add_to_cart`... Tool `livemcp_list_sites` cho agent biết đang có site nào mở. Tab đóng → toàn bộ tool namespace đó biến mất + `notifications/tools/list_changed`.
+
+Lý do không tạo N server cho N tab: Claude Desktop/agent cấu hình MCP server tĩnh trong config — không thể mọc server động. Namespace hóa tool là cách đúng với hiện trạng hệ sinh thái MCP.
+
+### 2.5 Server expose MCP qua cả stdio và Streamable HTTP
+
+- **stdio**: để khai báo trong config Claude Desktop / Claude Code (cách phổ biến nhất hiện nay).
+- **Streamable HTTP (127.0.0.1)**: cho agent khác kết nối. Dùng `@modelcontextprotocol/sdk` (TypeScript) — có sẵn cả hai transport + `tools/list_changed`.
+- Quan trọng: server phải hỗ trợ **dynamic tool list** và bắn `notifications/tools/list_changed` mỗi khi declarative thay đổi — đây là xương sống của mẫu "hành động → đợi → tool mới".
+
+---
+
+## 3. Giao thức nội bộ Extension ↔ Server (WebSocket)
+
+JSON messages qua `ws://127.0.0.1:8787`. Định nghĩa tối thiểu v1:
+
+### 3.1 Extension → Server
+
+```jsonc
+// Khi tab load trang có meta livemcp — khai sinh session
+{ "type": "site_announce", "tabId": 12, "url": "https://shopviet.vn",
+  "app": "ShopViet", "description": "...", "specVersion": "1.0" }
+
+// Snapshot toàn bộ declarative sau lần quét đầu (và sau navigation)
+{ "type": "declarative_snapshot", "tabId": 12, "seq": 1,
+  "tools": [ /* mảng ToolDecl, xem 3.3 */ ],
+  "resources": [ /* mảng ResourceDecl */ ] }
+
+// Thay đổi tăng dần từ MutationObserver (debounce 150ms)
+{ "type": "declarative_delta", "tabId": 12, "seq": 2,
+  "added": [...], "removed": ["tool_name"], "changed": [...] }
+
+// Kết quả thi hành một action
+{ "type": "action_result", "tabId": 12, "actionId": "a-91",
+  "status": "ok" | "timeout" | "error" | "navigated",
+  "resultText": "Đặt bàn thành công, mã BK-1023",
+  "newTools": ["pick_category_electronics"],   // tool xuất hiện nhờ hành động này
+  "durationMs": 840 }
+
+// Tab đóng / rời trang
+{ "type": "site_gone", "tabId": 12 }
+```
+
+### 3.2 Server → Extension
+
+```jsonc
+// Lệnh thi hành tool
+{ "type": "execute_action", "tabId": 12, "actionId": "a-91",
+  "tool": "add_to_cart",
+  "args": { "item": "iPhone 17" },          // args người dùng truyền (đã validate schema)
+  "formFill": null }                          // hoặc {guests: 4, date: "..."} với form tool
+
+// Đọc resource
+{ "type": "read_resource", "tabId": 12, "actionId": "a-92", "resource": "cart_items" }
+
+// Ping keepalive (giữ MV3 SW sống)
+{ "type": "ping" }
+```
+
+### 3.3 Cấu trúc `ToolDecl` (content script sinh ra, server chỉ việc map sang MCP)
+
+```jsonc
+{
+  "name": "add_to_cart",
+  "description": "Thêm sản phẩm vào giỏ hàng",
+  "kind": "element" | "form",
+  "action": "click",
+  "args": [ { "name": "item", "enum": ["iPhone 17", "Galaxy S26"] } ],  // gộp từ livemcp-arg
+  "formSchema": null,          // với kind=form: schema từ các input (đã convert theo bảng ở spec §4)
+  "wait": "#cart-badge[livemcp-state='ready']",
+  "waitGone": null,
+  "waitTimeout": 5000,
+  "resultSelector": "#cart-badge",
+  "confirm": null,             // hoặc câu cảnh báo từ livemcp-confirm
+  "navigate": false,
+  "available": true            // false nếu disabled/hidden
+}
+```
+
+**Nguyên tắc phân lớp:** content script chuẩn hóa DOM → `ToolDecl` (mọi hiểu biết về attribute nằm ở đây); server chuyển `ToolDecl` → MCP tool + inputSchema (mọi hiểu biết về MCP nằm ở đây). Hai bên không giẫm việc nhau — dễ test độc lập.
+
+---
+
+## 4. Luồng thi hành một tool (end-to-end)
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant Server as Local Server
+    participant SW as Ext Service Worker
+    participant CS as Content Script
+    participant Web as Trang web
+
+    Agent->>Server: tools/call add_to_cart {item: "iPhone 17"}
+    Server->>Server: Validate args theo inputSchema<br/>Nếu tool có confirm → dừng, hỏi user
+    Server->>SW: execute_action (WS)
+    SW->>CS: resolve target (tool + arg)
+    CS->>CS: Tìm element [livemcp-name=add_to_cart][livemcp-arg*="iPhone 17"]<br/>scrollIntoView, đo bounding rect
+    CS->>SW: toạ độ (x, y) + waitSpec
+    SW->>CS: lệnh bee-fly tới (x,y)
+    CS->>Web: 🐝 bay tới, chân trái giẫm (animation)
+    SW->>Web: CDP Input.dispatchMouseEvent tại (x,y)
+    Web->>Web: xử lý, set livemcp-state=busy → ready
+    CS->>CS: đợi theo waitSpec (wait selector + state ready)<br/>MutationObserver ghi nhận tool mới nếu có
+    CS->>SW: kết quả (resultText từ livemcp-result, newTools)
+    SW->>Server: action_result
+    Server->>Server: cập nhật tool list nếu có delta<br/>bắn tools/list_changed
+    Server->>Agent: kết quả text + gợi ý "tools mới: [...]"
+```
+
+**Chi tiết quan trọng trong luồng:**
+
+1. **Type text**: bay ong tới ô → CDP click để focus → với mỗi ký tự `Input.dispatchKeyEvent` (keyDown/keyUp) hoặc `Input.insertText` cho chuỗi dài (nhanh hơn, vẫn trusted) → mũi kim ong nhấp theo nhịp ký tự → `livemcp-submit-key` nếu có.
+2. **Form tool**: server gửi `formFill` map field→value; content script xếp thứ tự field theo DOM order; điền tuần tự từng field như trên rồi click submit.
+3. **Kết quả trả agent** luôn gồm 3 phần: `resultText` (từ `livemcp-result`), trạng thái (`ok/timeout/error/navigated`), và danh sách tool mới/mất đi — để agent "nhìn thấy" hệ quả hành động của mình mà không cần hỏi lại.
+4. **Timeout**: trả `status=timeout` kèm snapshot `livemcp-state` hiện tại của vùng đợi — agent tự quyết retry. Server không tự retry (tránh double-click "Thanh toán").
+
+---
+
+## 5. Content Script — chi tiết kỹ thuật cần lưu ý
+
+### 5.1 Scanner & Registry
+
+- Quét lần đầu khi `document_idle`: `querySelectorAll('[livemcp-name],[toolname],[livemcp-resource],[livemcp-canvas-map]')`.
+- Duy trì `Map<toolName, ElementRef[]>` (mảng vì tool tham số hóa có nhiều element cùng name). **Giữ tham chiếu element trực tiếp**, không lưu selector — DOM churn khiến selector mồ côi; element ref + `isConnected` check là tin cậy nhất.
+- Gộp `livemcp-arg`: các element cùng name → một ToolDecl, enum args hợp nhất. Khi thi hành, match element theo đúng cặp arg.
+
+### 5.2 MutationObserver — lọc đúng, debounce đúng
+
+```js
+new MutationObserver(muts => scheduleRescan(muts)).observe(document.documentElement, {
+  subtree: true, childList: true,
+  attributes: true,
+  attributeFilter: ['livemcp-state', 'livemcp-arg', 'disabled', 'hidden']
+});
+```
+
+- **Không rescan cả trang mỗi mutation.** Chỉ xử lý node added/removed có (hoặc chứa) phần tử mang `livemcp-*`; attribute change chỉ quan tâm danh sách filter trên.
+- Debounce 150ms gom delta; nhưng tín hiệu `livemcp-state` chuyển sang `ready` trong lúc **đang có action đợi** thì xử lý ngay lập tức (không debounce) — đây là đường nóng của cơ chế đợi.
+- Shadow DOM: với web greenfield, spec yêu cầu dùng light DOM cho phần tử khai báo, hoặc shadow root phải là `open`. Content script đệ quy observe các open shadow root gặp được (giữ danh sách các observer để disconnect khi root biến mất).
+
+### 5.3 Iframe cùng origin / khác origin
+
+- Same-origin iframe: content script với `"all_frames": true` chạy trong từng frame, mỗi frame tự quét và báo về SW kèm `frameId`; toạ độ phải cộng offset của iframe trong trang cha khi dispatch CDP (CDP dispatch theo viewport của tab).
+- Cross-origin iframe: mỗi frame vẫn có content script riêng (nếu host permission cho phép) — hoạt động bình thường vì mọi giao tiếp đi qua SW chứ không qua trang cha. Nếu không có permission → vùng đó ngoài scope, ghi rõ trong tài liệu user.
+
+### 5.4 Đọc kết quả & resource
+
+- `livemcp-result`/`read_*`: lấy `innerText` sau khi vùng đạt `ready`, chuẩn hóa whitespace, cắt trần độ dài (mặc định 4.000 ký tự, cấu hình được) để không phá context window của agent.
+- `<script type="application/livemcp+json">`: parse JSON, trả structured content (MCP `structuredContent`) — ưu tiên hơn innerText.
+- Table → mảng object theo header nếu có `<th>`.
+
+### 5.5 Bee Cursor 🐝
+
+- Một overlay layer duy nhất: element `position: fixed; z-index: 2147483647; pointer-events: none` chứa SVG con ong. **`pointer-events: none` là bắt buộc** — con ong không bao giờ được chặn chính cú click nó đang biểu diễn.
+- Animation bay: Web Animations API theo đường bezier (`offset-path` hoặc keyframes transform), thời gian bay tỉ lệ khoảng cách, có tốc độ tối đa (~250ms cho đường ngắn, trần ~900ms) để không làm chậm workflow.
+- Đồng bộ hành động: SW chờ content script báo "ong đã tới nơi" rồi mới dispatch CDP — hiệu ứng và hành động khớp nhau; nếu animation lỗi thì vẫn dispatch (visual không bao giờ được chặn chức năng).
+- Trạng thái ong: `idle` (đậu góc màn hình) → `flying` → `acting` (chân trái/phải giẫm khi click trái/phải, kim mũi nhấp khi type) → `waiting` (lơ lửng cạnh vùng đang đợi) → về `idle`.
+- Render trong shadow root riêng của overlay để CSS trang không phá được style con ong.
+
+---
+
+## 6. Local Server — chi tiết kỹ thuật cần lưu ý
+
+### 6.1 Stack đề xuất
+
+- **Node.js 22 + TypeScript**, `@modelcontextprotocol/sdk` (MCP), `ws` (WebSocket hub). Một package, chạy `npx livemcp-server` hoặc service.
+- Cấu trúc module: `mcp/` (transport + tool registry động) · `bridge/` (WS hub, quản lý extension connections) · `parser/` (ToolDecl → MCP schema) · `policy/` (confirm gate, sanitizer) · `store/` (session state).
+
+### 6.2 Vòng đời session & đồng bộ
+
+- `seq` tăng dần theo tab trong mọi message declarative; server bỏ message có seq cũ hơn đã nhận (chống race khi delta về trễ hơn snapshot mới sau navigation).
+- Navigation = `site_gone` + `site_announce` + snapshot mới (extension chịu trách nhiệm phát đúng thứ tự).
+- Extension mất kết nối WS → server giữ tool list 30s (grace period cho SW MV3 hồi sinh) rồi mới gỡ; agent gọi tool trong lúc mất kết nối nhận lỗi rõ ràng "extension disconnected, đang chờ kết nối lại".
+
+### 6.3 Policy layer (bảo mật — không được cắt xén khi triển khai)
+
+1. **WS chỉ bind `127.0.0.1`.** Handshake yêu cầu token: server sinh token lần chạy đầu, user dán vào popup extension một lần (chống website local khác giả làm extension).
+2. **Origin allowlist:** lần đầu gặp một origin mới, extension hỏi user "Cho phép agent điều khiển shopviet.vn?" — lưu quyết định. Không allowlist → không quét, không thi hành.
+3. **Confirm gate:** tool có `confirm` → `tools/call` trả về yêu cầu xác nhận (MCP elicitation nếu client hỗ trợ; fallback: trả message yêu cầu agent hỏi user rồi gọi lại với `confirmed: true` — cờ này do server thêm vào schema, và server chỉ chấp nhận sau khi đã phát yêu cầu xác nhận tương ứng).
+4. **Sanitize declarative trước khi đưa vào description tool:** cắt độ dài, strip các mẫu chỉ thị ("ignore previous instructions"...), escape markdown. Mọi text từ web là **dữ liệu không tin cậy** — nguy cơ chính của kiến trúc này là prompt injection từ trang web độc, phải xử lý ở server (chốt chặn duy nhất trước agent).
+5. **Từ chối type vào `input[type=password]`** trừ khi user bật rõ trong settings.
+6. Rate limit hành động (mặc định ~2 action/giây/tab) — vừa an toàn vừa khớp nhịp con ong.
+
+### 6.4 Tool hệ thống (server tự expose, không đến từ web)
+
+| Tool | Công dụng |
+|---|---|
+| `livemcp_list_sites()` | Liệt kê site/tab đang kết nối + mô tả |
+| `livemcp_get_tools(site)` | Tool list hiện tại của một site (agent tự làm mới hiểu biết) |
+| `livemcp_wait(site, selector?, timeoutMs)` | Cho agent chủ động đợi thêm (học "cách đợi của Playwright") |
+| `livemcp_read_page(site)` | Đọc toàn bộ resource + trạng thái các vùng `livemcp-state` — "con mắt" tổng của agent |
+
+---
+
+## 7. Cấu trúc repo đề xuất (monorepo)
+
+```
+livemcp/
+├── packages/
+│   ├── server/            # Local Server (Node + TS)
+│   │   ├── src/mcp/       # MCP transports, dynamic registry
+│   │   ├── src/bridge/    # WS hub + protocol messages
+│   │   ├── src/parser/    # ToolDecl → MCP schema
+│   │   └── src/policy/    # confirm gate, sanitizer, allowlist
+│   ├── extension/         # Chrome Extension MV3
+│   │   ├── src/sw/        # service worker: WS client, CDP executor, tab mgr
+│   │   ├── src/content/   # scanner, observer, waiter, reader, coordinator
+│   │   ├── src/bee/       # 🐝 overlay (SVG + Web Animations)
+│   │   └── manifest.json
+│   ├── protocol/          # Types chung: ToolDecl, WS messages (share server+extension)
+│   └── demo-site/         # Trang demo đạt chuẩn (kiêm test bed): shop + dropdown + canvas mẫu A/B/C
+├── docs/
+│   ├── livemcp-declarative-spec.md
+│   └── livemcp-architecture.md
+└── package.json           # npm workspaces
+```
+
+`packages/protocol` là hợp đồng trung tâm — thay đổi message/ToolDecl phải đi qua đây, TypeScript bắt lỗi lệch pha giữa server và extension ngay lúc build.
+
+---
+
+## 8. Thứ tự triển khai khuyến nghị (điều chỉnh từ roadmap nghiên cứu)
+
+Nguyên tắc: **dựng xương sống end-to-end mỏng nhất trước**, con ong và các action phụ làm sau.
+
+1. **M0 — Walking skeleton (ưu tiên tuyệt đối):** demo-site tĩnh 1 button + content script quét → SW → WS → server → MCP stdio → Claude gọi `click` thành công qua CDP. *Chứng minh toàn tuyến trong ~vài ngày; mọi rủi ro tích hợp lộ ra ở đây.*
+2. **M1 — Form + type + schema converter:** form tool, điền field, submit, `livemcp-result`.
+3. **M2 — Cơ chế đợi + DOM động:** `livemcp-state`, `livemcp-wait`, MutationObserver delta, `tools/list_changed`, mẫu dropdown.
+4. **M3 — Tool tham số hóa (`livemcp-arg`) + resource (`read_*`).**
+5. **M4 — Policy layer:** token pairing, origin allowlist, confirm gate, sanitizer. *(Bắt buộc xong trước khi đưa ai khác dùng.)*
+6. **M5 — Bee cursor 🐝** + trạng thái animation.
+7. **M6 — Canvas mẫu A/B/C** trên demo-site, navigation MPA, iframe.
+8. **M7 — Đóng gói:** npx installer, onboarding extension, tài liệu user.
+
+Test tự động đáng viết (theo nguyên tắc chọn lọc): unit test cho `parser/` (HTML → ToolDecl → JSON Schema — thuần logic, dễ hỏng, dễ test) và protocol seq/race trong `bridge/`. Phần tương tác browser thật kiểm bằng demo-site thủ công trước, chỉ thêm E2E khi luồng ổn định.
+
+---
+
+## 9. Rủi ro kỹ thuật còn lại & cách ứng phó
+
+| Rủi ro | Mức | Ứng phó |
+|---|---|---|
+| Prompt injection từ nội dung web độc | **Cao nhất** | Sanitizer ở server (6.3.4), confirm gate, origin allowlist. Không bao giờ coi text web là chỉ thị |
+| Banner debugger gây e ngại người dùng | Trung bình | Không né được — biến thành tính năng minh bạch; attach lười/detach sớm |
+| MV3 SW bị kill giữa phiên | Trung bình | Keepalive ping 20s + state trong `chrome.storage.session` + resync khi thức dậy |
+| Web khai báo sai/thiếu (`livemcp-state` không cập nhật) | Trung bình | Fallback "DOM lắng 500ms" + timeout luôn trả snapshot để agent tự xử; validator tool cho dev (`npx livemcp-validate <url>`) bắt lỗi tuân thủ sớm |
+| Race: delta tới sau snapshot của navigation mới | Thấp | Cơ chế `seq` (6.2) |
+| Đụng độ tên tool giữa 2 site | Thấp | Namespace theo app (2.4) |
+
+---
+
+*Kiến trúc v1.0 draft — biên soạn cho dự án Live MCP, 31/07/2026. Cặp tài liệu: spec (cho web developer bên thứ ba) + kiến trúc (cho developer hệ thống Live MCP).*

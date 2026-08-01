@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Live MCP",
+  "version": "0.1.0",
+  "description": "Cho AI agent điều khiển trang web chuẩn Live MCP bằng chuột và bàn phím thật.",
+  "minimum_chrome_version": "116",
+  "background": {
+    "service_worker": "sw.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "permissions": ["debugger", "tabs", "storage"],
+  "host_permissions": ["http://*/*", "https://*/*"]
+}

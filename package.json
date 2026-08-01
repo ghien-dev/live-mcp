@@ -1,0 +1,27 @@
+{
+  "name": "livemcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Live MCP — cầu nối cho AI agent điều khiển web thuần declarative",
+  "workspaces": [
+    "packages/protocol",
+    "packages/server",
+    "packages/extension",
+    "packages/demo-site"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w @livemcp/protocol && npm run build -w @livemcp/server && npm run build -w @livemcp/extension",
+    "dev:server": "npm run dev -w @livemcp/server",
+    "dev:ext": "npm run dev -w @livemcp/extension",
+    "dev:site": "npm run dev -w @livemcp/demo-site",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

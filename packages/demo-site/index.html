@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Ba meta cấp trang bắt buộc (spec §2) -->
+  <meta name="livemcp" content="1.0">
+  <meta name="livemcp-app" content="LiveMCP Demo">
+  <meta name="livemcp-description"
+        content="Trang demo tối giản của chuẩn Live MCP, dùng để kiểm chứng toàn tuyến agent → server → extension → DOM.">
+
+  <title>Live MCP — Demo M0</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <header>
+    <h1>🐝 Live MCP — Walking Skeleton</h1>
+    <p class="sub">Trang này khai báo <strong>một</strong> tool duy nhất bằng HTML thuần.
+       Không có <code>registerTool()</code>, không có Imperative API.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Tool <code>say_hello</code></h2>
+
+      <button id="hello-btn"
+              livemcp-action="click"
+              livemcp-name="say_hello"
+              livemcp-description="Bấm nút chào. Sau khi bấm, ô kết quả hiển thị lời chào kèm số lần đã bấm."
+              livemcp-result="#out">
+        Chào tôi đi
+      </button>
+
+      <div id="out" livemcp-state="idle">Chưa có ai bấm nút.</div>
+
+      <p class="hint">Agent nhìn thấy tool này dưới tên
+         <code>livemcp_demo__say_hello</code> (namespace lấy từ <code>livemcp-app</code>).</p>
+    </section>
+
+    <section class="card">
+      <h2>Nút không khai báo</h2>
+      <button id="invisible-btn">Nút này agent không thấy</button>
+      <p class="hint">Không có <code>livemcp-*</code> = agent không thấy (spec §9.2).</p>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
