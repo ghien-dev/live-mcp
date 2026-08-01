@@ -110,8 +110,11 @@ function handleServerMessage(msg: ServerToExtensionMsg): void {
 /** Nhịp nghỉ giữa hai bước thao tác — vừa giống người, vừa cho trang kịp phản ứng. */
 const STEP_GAP_MS = 30;
 
-/** Số vòng sửa tối đa khi content script báo giá trị chưa vào đúng ô. */
-const MAX_ROUNDS = 3;
+/**
+ * Số vòng tối đa: 1 vòng dò thứ tự ô ngày + 1 vòng thao tác thật + tối đa 3
+ * vòng gõ lại theo thứ tự segment khác, cộng biên an toàn.
+ */
+const MAX_ROUNDS = 6;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

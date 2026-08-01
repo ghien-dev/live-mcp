@@ -1,5 +1,12 @@
 import type { ToolDecl } from '@livemcp/protocol';
 import type { ActionStep } from '../messages.js';
+import {
+  createProbeInput,
+  currentOrder,
+  dateDigits,
+  PROBE_DIGITS,
+  type DateOrder,
+} from './dateOrder.js';
 
 /**
  * Lập kế hoạch thao tác: từ `ToolDecl` + tham số của agent → danh sách bước
@@ -90,30 +97,14 @@ async function focusFirstSegment(el: HTMLElement): Promise<ActionStep[]> {
 // Ngày / giờ: gõ chữ số theo đúng thứ tự segment mà trình duyệt đang hiển thị
 // ---------------------------------------------------------------------------
 
-export type DateOrder = Array<'day' | 'month' | 'year'>;
-
 /**
- * Thứ tự segment của `<input type="date">` do locale trình duyệt quyết định
- * (en-US: mm/dd/yyyy, vi-VN: dd/mm/yyyy). Hỏi thẳng `Intl` thay vì đoán.
+ * Kế hoạch dò thứ tự ô ngày: gõ ngày mốc vào ô `date` ẩn của riêng extension.
+ * Ứng dụng của trang không thấy gì — ô dò nằm ngoài mọi form và bị gỡ ngay sau
+ * khi đo (xem `dateOrder.ts` để hiểu vì sao phải đo thay vì đoán).
  */
-export function browserDateOrder(): DateOrder {
-  const parts = new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const order = parts
-    .map((p) => p.type)
-    .filter((t): t is 'day' | 'month' | 'year' => t === 'day' || t === 'month' || t === 'year');
-  return order.length === 3 ? order : ['month', 'day', 'year'];
-}
-
-/** '2026-08-20' + thứ tự segment → chuỗi chữ số cần gõ. */
-export function dateDigits(iso: string, order: DateOrder): string[] {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
-  if (!m) throw new PlanError(`Ngày "${iso}" phải ở dạng YYYY-MM-DD.`);
-  const value = { year: m[1]!, month: m[2]!, day: m[3]! };
-  return order.flatMap((seg) => value[seg].split(''));
+export async function buildProbePlan(): Promise<ActionStep[]> {
+  const probe = createProbeInput();
+  return [...(await focusFirstSegment(probe)), { kind: 'keys', keys: [...PROBE_DIGITS] }];
 }
 
 function browserUsesHour12(): boolean {
@@ -121,7 +112,7 @@ function browserUsesHour12(): boolean {
 }
 
 /** '14:30' → chữ số + phím AM/PM nếu locale dùng 12 giờ. */
-function timeKeys(raw: string): string[] {
+export function timeKeys(raw: string): string[] {
   const m = /^(\d{2}):(\d{2})/.exec(raw.trim());
   if (!m) throw new PlanError(`Giờ "${raw}" phải ở dạng HH:MM (24 giờ).`);
   const hour24 = Number(m[1]);
@@ -216,7 +207,7 @@ async function planForm(
 ): Promise<Plan> {
   const steps: ActionStep[] = [];
   const expected: ExpectedField[] = [];
-  const order = browserDateOrder();
+  const order = currentOrder();
   let hasPrecedingField = false;
 
   for (const field of decl.fields ?? []) {
@@ -335,15 +326,14 @@ export function verify(expected: ExpectedField[]): ExpectedField[] {
   });
 }
 
-/** Gõ lại một ô ngày với thứ tự segment đảo ngược ngày ↔ tháng. */
-export async function retryDatePlan(field: ExpectedField): Promise<ActionStep[]> {
-  const order = browserDateOrder();
-  const swapped: DateOrder = order.map((seg) =>
-    seg === 'day' ? 'month' : seg === 'month' ? 'day' : 'year',
-  );
+/** Gõ lại một ô ngày với một thứ tự segment khác. */
+export async function retryDatePlan(
+  field: ExpectedField,
+  order: DateOrder,
+): Promise<ActionStep[]> {
   return [
     ...(await focusFirstSegment(field.el)),
-    ...dateLikeSteps(field.htmlType, String(field.value), swapped),
+    ...dateLikeSteps(field.htmlType, String(field.value), order),
   ];
 }
 

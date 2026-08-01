@@ -11,6 +11,23 @@ function note(text) {
   log.textContent = lines.slice(-12).join('\n');
 }
 
+// Chẩn đoán: trình duyệt này đang hiển thị ô ngày theo thứ tự nào?
+// `input.value` luôn là ISO YYYY-MM-DD, nhưng thứ tự GÕ lại theo locale giao
+// diện của trình duyệt — đây chính là chỗ tự động hoá hay vấp.
+{
+  const order = new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .formatToParts(new Date())
+    .filter((p) => ['day', 'month', 'year'].includes(p.type))
+    .map((p) => ({ day: 'dd', month: 'mm', year: 'yyyy' })[p.type])
+    .join('/');
+  note(`navigator.language = ${navigator.language} · Intl đoán ô ngày hiển thị: ${order}`);
+  note('(Live MCP không tin con số này — nó tự đo bằng một ô date ẩn của riêng nó)');
+}
+
 // Ghi lại xem input đến từ bàn phím thật hay bị set bằng JavaScript.
 for (const el of form.elements) {
   if (!el.name) continue;

@@ -3,12 +3,22 @@ import type { AfterActionReply, ContentToSw, PlanReply, SwToContent } from '../m
 import { readPageInfo, scan, type ScanResult } from './scanner.js';
 import {
   buildPlan,
+  buildProbePlan,
   DATE_LIKE,
   PlanError,
   retryDatePlan,
   verify,
   type ExpectedField,
 } from './plan.js';
+import {
+  currentOrder,
+  interpretProbe,
+  isOrderKnown,
+  nextCandidate,
+  rememberOrder,
+  removeProbe,
+  type DateOrder,
+} from './dateOrder.js';
 
 /**
  * Content script — "con mắt và bàn tay chỉ đường" của Live MCP trên trang.
@@ -22,8 +32,17 @@ if (page) {
   let current: ScanResult = scan();
   let seq = 0;
 
-  /** Kỳ vọng của hành động đang chạy, dùng để xác minh sau khi thi hành xong. */
-  let pending: { tool: string; expected: ExpectedField[]; retried: boolean } | null = null;
+  /**
+   * Hành động đang chạy. `phase='probe'` là vòng đo thứ tự ô ngày (chưa đụng
+   * vào form của trang); `phase='main'` mới là thao tác thật.
+   */
+  let pending: {
+    tool: string;
+    args: Record<string, unknown>;
+    phase: 'probe' | 'main';
+    expected: ExpectedField[];
+    triedOrders: DateOrder[];
+  } | null = null;
 
   const send = (msg: ContentToSw) => {
     chrome.runtime.sendMessage(msg).catch(() => {
@@ -86,6 +105,13 @@ if (page) {
     return candidates[0] ?? null;
   }
 
+  /** Hành động này có chạm vào ô ngày/giờ nào không? */
+  function touchesDateField(decl: ToolDecl, args: Record<string, unknown>): boolean {
+    return (decl.fields ?? []).some(
+      (f) => DATE_LIKE.has(f.htmlType) && args[f.name] !== undefined && args[f.name] !== '',
+    );
+  }
+
   async function planAction(tool: string, args: Record<string, unknown>): Promise<PlanReply> {
     const decl = current.tools.find((t) => t.name === tool);
     const el = findElement(tool);
@@ -94,11 +120,26 @@ if (page) {
     }
 
     try {
+      // Chưa biết trình duyệt xếp segment ngày theo thứ tự nào thì ĐO trước,
+      // trên ô của riêng extension — để ứng dụng của trang không bao giờ nhận
+      // một ngày sai rồi mới được sửa.
+      if (!isOrderKnown() && touchesDateField(decl, args)) {
+        pending = { tool, args, phase: 'probe', expected: [], triedOrders: [] };
+        return { ok: true, steps: await buildProbePlan() };
+      }
+
       const plan = await buildPlan(el, decl, args);
-      pending = { tool, expected: plan.expected, retried: false };
+      pending = {
+        tool,
+        args,
+        phase: 'main',
+        expected: plan.expected,
+        triedOrders: [currentOrder()],
+      };
       return { ok: true, steps: plan.steps };
     } catch (err) {
       pending = null;
+      removeProbe();
       return {
         ok: false,
         error: err instanceof PlanError ? err.message : String(err),
@@ -114,17 +155,29 @@ if (page) {
    * livemcp-state / wait-gone) theo thứ tự ưu tiên ở spec §7.2.
    */
   async function afterAction(tool: string): Promise<AfterActionReply> {
+    // --- vòng dò: đọc kết quả trên ô của extension, chưa đụng gì tới trang ---
+    if (pending?.phase === 'probe' && pending.tool === tool) {
+      return finishProbe(tool);
+    }
+
     const decl = current.tools.find((t) => t.name === tool);
     const timedOut = decl ? await waitForSettle(decl) : (await sleep(200), false);
 
-    // --- xác minh: ô ngày rất dễ nhận sai thứ tự dd/mm tuỳ locale ------------
-    if (pending?.tool === tool && !pending.retried) {
-      const wrong = verify(pending.expected);
-      const badDate = wrong.find((f) => DATE_LIKE.has(f.htmlType));
+    // --- xác minh: ô ngày là chỗ dễ lệch nhất, thử tiếp thứ tự khác ---------
+    if (pending?.tool === tool && pending.phase === 'main') {
+      const badDate = verify(pending.expected).find((f) => DATE_LIKE.has(f.htmlType));
       if (badDate) {
-        pending.retried = true;
-        console.info('[Live MCP] ô ngày nhận sai thứ tự segment — gõ lại với thứ tự đảo.');
-        return { status: 'retry', steps: await retryDatePlan(badDate) };
+        const candidate = nextCandidate(pending.triedOrders);
+        if (candidate) {
+          pending.triedOrders.push(candidate);
+          console.info(
+            `[Live MCP] ô ngày chưa đúng — gõ lại theo thứ tự ${candidate.join('-')}.`,
+          );
+          return { status: 'retry', steps: await retryDatePlan(badDate, candidate) };
+        }
+      } else if (pending.expected.some((f) => DATE_LIKE.has(f.htmlType))) {
+        // Thứ tự vừa dùng cho kết quả đúng → ghi nhớ, lần sau khỏi dò lại.
+        rememberOrder(pending.triedOrders[pending.triedOrders.length - 1]!);
       }
     }
 
@@ -166,6 +219,54 @@ if (page) {
         ? `Quá ${decl?.waitTimeout ?? DEFAULT_WAIT_TIMEOUT_MS}ms mà điều kiện đợi chưa thoả.`
         : undefined,
     };
+  }
+
+  /**
+   * Kết thúc vòng dò: đọc `.value` của ô dò → suy ra thứ tự segment thật của
+   * trình duyệt → gỡ ô dò → soạn plan thật và bảo SW thi hành tiếp.
+   */
+  async function finishProbe(tool: string): Promise<AfterActionReply> {
+    const probe = document
+      .getElementById('livemcp-date-probe')
+      ?.shadowRoot?.querySelector('input');
+    const raw = probe?.value ?? '';
+    removeProbe();
+
+    const measured = interpretProbe(raw);
+    if (measured) {
+      rememberOrder(measured);
+    } else {
+      console.warn(
+        `[Live MCP] không đọc được thứ tự ô ngày từ phép dò (value="${raw}") — ` +
+          `tạm dùng phỏng đoán ${currentOrder().join('-')} rồi tự sửa nếu lệch.`,
+      );
+    }
+
+    const decl = current.tools.find((t) => t.name === tool);
+    const el = findElement(tool);
+    const args = pending?.args ?? {};
+    if (!decl || !el) {
+      pending = null;
+      return { status: 'error', error: `Phần tử của tool "${tool}" đã biến mất khỏi trang.` };
+    }
+
+    try {
+      const plan = await buildPlan(el, decl, args);
+      pending = {
+        tool,
+        args,
+        phase: 'main',
+        expected: plan.expected,
+        triedOrders: [currentOrder()],
+      };
+      return { status: 'retry', steps: plan.steps };
+    } catch (err) {
+      pending = null;
+      return {
+        status: 'error',
+        error: err instanceof PlanError ? err.message : String(err),
+      };
+    }
   }
 
   /**
