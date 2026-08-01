@@ -1,4 +1,5 @@
 import { qualifyToolName, type ResourceDecl, type ToolDecl } from '@livemcp/protocol';
+import { fieldsToSchema } from './schema.js';
 
 /**
  * Dịch `ToolDecl` (sự thật DOM do content script chuẩn hoá) sang tool MCP.
@@ -24,6 +25,11 @@ export interface McpToolShape {
 const EMPTY_SCHEMA: JsonSchema = { type: 'object', properties: {} };
 
 export function buildInputSchema(decl: ToolDecl): JsonSchema {
+  // Form là đơn vị tool tự nhiên nhất: nhiều input → một submit → một kết quả.
+  if (decl.kind === 'form') {
+    return fieldsToSchema(decl.fields ?? []);
+  }
+
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
 
@@ -47,8 +53,6 @@ export function buildInputSchema(decl: ToolDecl): JsonSchema {
     };
     required.push('text');
   }
-
-  // TODO(M1): decl.fields (kind='form') → schema theo bảng chuyển đổi spec §4.
 
   if (Object.keys(properties).length === 0) return { ...EMPTY_SCHEMA };
   return { type: 'object', properties, required };

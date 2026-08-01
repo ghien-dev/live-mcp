@@ -145,6 +145,16 @@ function validateArgs(decl: ToolDecl, args: Record<string, unknown>): string | n
   if (decl.kind === 'element' && decl.action === 'type' && typeof args.text !== 'string') {
     return 'Thiếu tham số bắt buộc "text" (nội dung cần gõ).';
   }
+
+  // Form: thiếu field bắt buộc thì báo ngay, đừng để agent điền dở rồi submit hỏng.
+  if (decl.kind === 'form') {
+    const missing = (decl.fields ?? [])
+      .filter((f) => f.required && (args[f.name] === undefined || args[f.name] === ''))
+      .map((f) => f.name);
+    if (missing.length > 0) {
+      return `Thiếu tham số bắt buộc: ${missing.join(', ')}.`;
+    }
+  }
   return null;
 }
 

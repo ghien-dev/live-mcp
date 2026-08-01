@@ -77,3 +77,34 @@ code {
 }
 
 .hint { color: var(--muted); font-size: .875rem; margin: 1rem 0 0; }
+.hint a { color: inherit; }
+
+.field { margin-bottom: .9rem; display: flex; flex-direction: column; gap: .3rem; }
+.field.checkbox { flex-direction: row; align-items: center; gap: .5rem; }
+.field label { font-size: .875rem; color: var(--muted); }
+
+input[type="number"], input[type="date"], input[type="time"], input[type="text"], select {
+  font: inherit;
+  padding: .5rem .6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  max-width: 22rem;
+}
+
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.log {
+  margin: 0;
+  padding: .9rem 1rem;
+  border-radius: 8px;
+  border: 1px dashed var(--line);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: .8rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  color: var(--muted);
+}
+
+#booking-result { white-space: pre-wrap; }

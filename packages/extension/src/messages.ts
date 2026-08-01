@@ -2,8 +2,12 @@
  * Giao thức nội bộ giữa Service Worker và Content Script.
  *
  * Khác với `@livemcp/protocol` (hợp đồng SW ↔ Server), các message ở đây không
- * bao giờ ra khỏi extension nên giữ tối giản: SW không biết gì về DOM, content
- * script không biết gì về WebSocket/CDP.
+ * bao giờ ra khỏi extension nên giữ tối giản.
+ *
+ * Mô hình: **content script lập kế hoạch, service worker thi hành**. Content
+ * script biết DOM (toạ độ, thứ tự field, giá trị hiện tại) nhưng không có quyền
+ * CDP; SW có quyền CDP nhưng không được biết gì về DOM. `ActionStep` là ranh
+ * giới giữa hai bên.
  */
 import type { ActionStatus, ResourceDecl, ToolDecl } from '@livemcp/protocol';
 
@@ -13,6 +17,21 @@ export interface PageInfo {
   description: string;
   specVersion: string;
 }
+
+/**
+ * Một bước thao tác vật lý. Toạ độ luôn theo viewport, đơn vị CSS pixel —
+ * ngôn ngữ chung của hành động (docs/livemcp-architecture.md §2.2).
+ */
+export type ActionStep =
+  | { kind: 'click'; x: number; y: number; button?: 'left' | 'right'; clickCount?: number }
+  /** Gõ nguyên chuỗi vào phần tử đang focus (nhanh, vẫn là trusted input). */
+  | { kind: 'insertText'; text: string }
+  /** Bấm lần lượt các phím: 'Tab', 'Enter', 'ArrowLeft', '0'..'9', 'a'... */
+  | { kind: 'keys'; keys: string[] }
+  /** Ctrl+A — xoá nội dung cũ trước khi gõ đè. */
+  | { kind: 'selectAll' }
+  /** Nghỉ giữa các bước để trang kịp phản ứng (vd dropdown vừa mở). */
+  | { kind: 'wait'; ms: number };
 
 export type ContentToSw =
   | {
@@ -25,24 +44,26 @@ export type ContentToSw =
   | { type: 'cs_site_gone' };
 
 export type SwToContent =
-  | { type: 'sw_ping' }
-  /** Yêu cầu content script tìm phần tử và trả về toạ độ tâm trong viewport. */
-  | { type: 'sw_resolve_target'; tool: string; args: Record<string, unknown> }
-  /** Sau khi CDP đã dispatch xong: đợi trang ổn định rồi đọc kết quả. */
+  /** Lập kế hoạch thao tác cho một tool (tìm phần tử, tính toạ độ, xếp thứ tự field). */
+  | { type: 'sw_plan_action'; tool: string; args: Record<string, unknown> }
+  /** Sau khi SW thi hành xong plan: đợi trang ổn định, xác minh, đọc kết quả. */
   | { type: 'sw_after_action'; tool: string }
   /** SW vừa hồi sinh — xin lại snapshot (§2.3 stateless-recoverable). */
   | { type: 'sw_request_resync' };
 
-export interface ResolveTargetReply {
+export interface PlanReply {
   ok: boolean;
-  /** Toạ độ tâm phần tử theo viewport, đơn vị CSS pixel — ngôn ngữ chung với CDP (§2.2). */
-  x?: number;
-  y?: number;
+  steps?: ActionStep[];
   error?: string;
 }
 
 export interface AfterActionReply {
-  status: ActionStatus;
+  /**
+   * 'retry' = trang chưa đúng ý (vd ô ngày nhận sai thứ tự dd/mm) và content
+   * script đã soạn sẵn plan sửa; SW thi hành rồi hỏi lại.
+   */
+  status: ActionStatus | 'retry';
+  steps?: ActionStep[];
   resultText?: string;
   stateSnapshot?: string;
   error?: string;

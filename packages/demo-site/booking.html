@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <meta name="livemcp" content="1.0">
+  <meta name="livemcp-app" content="BookMyTable">
+  <meta name="livemcp-description"
+        content="Ứng dụng đặt bàn nhà hàng. Cho phép đặt bàn theo số khách, ngày, giờ và khu vực ngồi.">
+
+  <title>BookMyTable — Demo M1</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <header>
+    <h1>🍽 BookMyTable</h1>
+    <p class="sub">Demo mẫu khai báo <strong>form</strong> của chuẩn Live MCP (spec §4).
+       Toàn bộ schema tool sinh ra từ HTML semantic — không có dòng JS đăng ký nào.</p>
+    <p class="hint"><a href="./index.html">← Về trang demo M0</a></p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Tool <code>book_table</code></h2>
+
+      <!-- toolname/tooldescription/toolparamdescription: tương thích ngược WebMCP gốc -->
+      <form id="booking-form"
+            toolname="book_table"
+            tooldescription="Đặt bàn nhà hàng. Trả về mã đặt bàn nếu thành công."
+            livemcp-wait="#booking-result[livemcp-state='ready'], #booking-result[livemcp-state='error']"
+            livemcp-result="#booking-result"
+            livemcp-wait-timeout="10000">
+
+        <div class="field">
+          <label for="guests">Số khách</label>
+          <input id="guests" type="number" name="guests" min="1" max="20" required
+                 toolparamdescription="Số lượng khách, từ 1 đến 20">
+        </div>
+
+        <div class="field">
+          <label for="date">Ngày</label>
+          <input id="date" type="date" name="date" required
+                 toolparamdescription="Ngày đặt bàn, định dạng YYYY-MM-DD">
+        </div>
+
+        <div class="field">
+          <label for="time">Giờ</label>
+          <input id="time" type="time" name="time"
+                 toolparamdescription="Giờ đặt bàn, định dạng HH:MM (24 giờ)">
+        </div>
+
+        <div class="field">
+          <label for="area">Khu vực</label>
+          <select id="area" name="area" toolparamdescription="Khu vực ngồi mong muốn">
+            <option value="indoor">Trong nhà</option>
+            <option value="outdoor">Ngoài trời</option>
+            <option value="balcony">Ban công</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="note">Ghi chú</label>
+          <input id="note" type="text" name="note" maxlength="80"
+                 toolparamdescription="Ghi chú thêm cho nhà hàng, tối đa 80 ký tự">
+        </div>
+
+        <div class="field checkbox">
+          <input id="window-seat" type="checkbox" name="windowSeat"
+                 toolparamdescription="Có muốn ngồi cạnh cửa sổ không">
+          <label for="window-seat">Ưu tiên bàn cạnh cửa sổ</label>
+        </div>
+
+        <button type="submit">Đặt bàn</button>
+      </form>
+
+      <!-- Vùng kết quả: trang tự cập nhật livemcp-state (hợp đồng spec §7.1) -->
+      <div id="booking-result" livemcp-state="idle">Chưa có đặt bàn nào.</div>
+    </section>
+
+    <section class="card">
+      <h2>Trang web nhìn thấy gì</h2>
+      <pre id="log" class="log">(chưa có sự kiện)</pre>
+      <p class="hint">Mỗi ô ghi nhận <code>isTrusted</code> của sự kiện — bằng chứng agent gõ
+         bằng bàn phím thật chứ không set <code>.value</code> bằng JavaScript.</p>
+    </section>
+  </main>
+
+  <script src="./booking.js"></script>
+</body>
+</html>

@@ -1,12 +1,13 @@
 import type { ActionResultMsg, ServerToExtensionMsg } from '@livemcp/protocol';
 import type {
+  ActionStep,
   AfterActionReply,
   ContentToSw,
   PageInfo,
-  ResolveTargetReply,
+  PlanReply,
   SwToContent,
 } from '../messages.js';
-import { click, detach, ensureAttached } from './cdp.js';
+import { click, detach, ensureAttached, insertText, pressKey, selectAll } from './cdp.js';
 import { ServerLink } from './ws.js';
 
 /**
@@ -106,15 +107,54 @@ function handleServerMessage(msg: ServerToExtensionMsg): void {
   }
 }
 
+/** Nhịp nghỉ giữa hai bước thao tác — vừa giống người, vừa cho trang kịp phản ứng. */
+const STEP_GAP_MS = 30;
+
+/** Số vòng sửa tối đa khi content script báo giá trị chưa vào đúng ô. */
+const MAX_ROUNDS = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Thi hành một plan do content script soạn. SW không biết plan này nghĩa là gì. */
+async function runSteps(tabId: number, steps: ActionStep[]): Promise<void> {
+  for (const step of steps) {
+    switch (step.kind) {
+      case 'click':
+        await click(tabId, step.x, step.y, step.button ?? 'left', step.clickCount ?? 1);
+        break;
+      case 'insertText':
+        await insertText(tabId, step.text);
+        break;
+      case 'keys':
+        for (const key of step.keys) {
+          await pressKey(tabId, key);
+          await sleep(STEP_GAP_MS);
+        }
+        break;
+      case 'selectAll':
+        await selectAll(tabId);
+        break;
+      case 'wait':
+        await sleep(step.ms);
+        break;
+    }
+    await sleep(STEP_GAP_MS);
+  }
+}
+
 /**
  * Luồng thi hành một tool (docs/livemcp-architecture.md §4):
- * resolve toạ độ (content script) → dispatch CDP → đọc kết quả (content script).
+ * content script lập plan → SW dispatch CDP → content script xác minh + đọc kết quả.
+ * Nếu content script báo `retry` (vd ô ngày nhận sai thứ tự dd/mm theo locale),
+ * thi hành plan sửa rồi hỏi lại — tối đa `MAX_ROUNDS` vòng.
  */
 async function executeAction(
   tabId: number,
   actionId: string,
   tool: string,
-  _args: Record<string, unknown>,
+  args: Record<string, unknown>,
 ): Promise<void> {
   const started = Date.now();
   const reply = (result: Omit<ActionResultMsg, 'type' | 'tabId' | 'actionId'>) =>
@@ -132,27 +172,36 @@ async function executeAction(
       return;
     }
 
-    const target = await sendToTab<ResolveTargetReply>(tabId, {
-      type: 'sw_resolve_target',
-      tool,
-      args: _args,
-    });
-    if (!target.ok || target.x === undefined || target.y === undefined) {
-      reply({ status: 'error', error: target.error ?? 'Không xác định được vị trí phần tử.' });
+    const plan = await sendToTab<PlanReply>(tabId, { type: 'sw_plan_action', tool, args });
+    if (!plan.ok || !plan.steps) {
+      reply({ status: 'error', error: plan.error ?? 'Không lập được kế hoạch thao tác.' });
       return;
     }
 
-    // TODO(M5): bảo content script cho ong bay tới (x, y) và đợi ong tới nơi.
+    // TODO(M5): bảo content script cho ong bay tới từng toạ độ trước mỗi bước.
 
     await ensureAttached(tabId);
-    await click(tabId, target.x, target.y, 'left');
 
-    const after = await sendToTab<AfterActionReply>(tabId, { type: 'sw_after_action', tool });
+    let steps = plan.steps;
+    for (let round = 0; round < MAX_ROUNDS; round += 1) {
+      await runSteps(tabId, steps);
+
+      const after = await sendToTab<AfterActionReply>(tabId, { type: 'sw_after_action', tool });
+      if (after.status !== 'retry') {
+        reply({
+          status: after.status,
+          resultText: after.resultText,
+          stateSnapshot: after.stateSnapshot,
+          error: after.error,
+        });
+        return;
+      }
+      steps = after.steps ?? [];
+    }
+
     reply({
-      status: after.status,
-      resultText: after.resultText,
-      stateSnapshot: after.stateSnapshot,
-      error: after.error,
+      status: 'error',
+      error: `Đã thử ${MAX_ROUNDS} lần nhưng giá trị vẫn không vào đúng ô.`,
     });
   } catch (err) {
     reply({ status: 'error', error: err instanceof Error ? err.message : String(err) });
