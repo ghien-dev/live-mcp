@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <meta name="livemcp" content="1.0">
+  <meta name="livemcp-app" content="EdgeCases">
+  <meta name="livemcp-description"
+        content="Trang thử các ca biên của Live MCP: phần tử bị che, phần tử không focus được, option bị khoá.">
+
+  <title>Edge Cases — lưới E2E</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <header>
+    <h1>🧪 Edge Cases</h1>
+    <p class="sub">Trang này <strong>không</strong> phải mẫu để học theo — nó cố ý vi phạm
+       spec §9.5.1 ở vài chỗ, để lưới E2E kiểm rằng extension <em>từ chối một cách rõ ràng</em>
+       thay vì thao tác bừa.</p>
+    <p class="hint"><a href="./booking.html">← Về demo đặt bàn</a></p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>1. Phần tử không focus được, lại còn bị che</h2>
+      <p class="hint">Một <code>&lt;div&gt;</code> (không focus được → buộc phải đi đường chuột)
+         nằm dưới một lớp phủ trong suốt. Đúng đắn nghĩa là: huỷ hành động và nói rõ trúng vào đâu.</p>
+
+      <div style="position: relative; height: 60px;">
+        <div id="buried"
+             livemcp-name="click_buried"
+             livemcp-description="Nút bị lớp phủ che hoàn toàn — hành động này phải thất bại rõ ràng."
+             livemcp-action="click"
+             style="position:absolute; inset:0; background:#eef; display:flex;
+                    align-items:center; justify-content:center;">
+          Tôi bị che
+        </div>
+        <!-- Lớp phủ trong suốt: mắt thường không thấy, nhưng nó nuốt mọi cú click. -->
+        <div id="blanket"
+             style="position:absolute; inset:0; background:transparent;"></div>
+      </div>
+      <div id="buried-result" livemcp-state="idle">chưa bấm</div>
+    </section>
+
+    <section class="card">
+      <h2>2. Phần tử không focus được nhưng KHÔNG bị che</h2>
+      <p class="hint">Cùng là <code>&lt;div&gt;</code>, nhưng thông thoáng — đường chuột phải
+         chạy được bình thường.</p>
+
+      <div id="reachable"
+           livemcp-name="click_reachable"
+           livemcp-description="Nút div bình thường, không bị che."
+           livemcp-action="click"
+           style="height:48px; background:#efe; display:flex;
+                  align-items:center; justify-content:center;">
+        Bấm được
+      </div>
+      <div id="reachable-result" livemcp-state="idle">chưa bấm</div>
+    </section>
+
+    <section class="card">
+      <h2>3. Select có option bị khoá</h2>
+      <p class="hint">Mũi tên <strong>bỏ qua</strong> option <code>disabled</code>, nên phép trừ
+         <code>Δindex</code> sẽ sai. Vòng bấm-rồi-xác-minh phải vẫn tới đúng đích.</p>
+
+      <form id="pick-form"
+            toolname="pick_city"
+            tooldescription="Chọn thành phố. Trả về tên thành phố đã chọn."
+            livemcp-wait="#pick-result[livemcp-state='ready']"
+            livemcp-result="#pick-result">
+        <div class="field">
+          <label for="city">Thành phố</label>
+          <select id="city" name="city" toolparamdescription="Thành phố cần chọn">
+            <option value="hanoi">Hà Nội</option>
+            <option value="hue" disabled>Huế (hết chỗ)</option>
+            <option value="danang" disabled>Đà Nẵng (hết chỗ)</option>
+            <option value="saigon">Sài Gòn</option>
+            <option value="cantho">Cần Thơ</option>
+          </select>
+        </div>
+        <button type="submit">Chọn</button>
+      </form>
+      <div id="pick-result" livemcp-state="idle">chưa chọn</div>
+    </section>
+
+    <section class="card">
+      <h2>4. Form nằm trong shadow DOM</h2>
+      <p class="hint"><strong>Chưa hỗ trợ.</strong> Scanner dùng
+         <code>querySelectorAll</code>, vốn không xuyên qua shadow root — nên tool trong
+         đây không bao giờ được phát hiện. Fixture để sẵn cho ngày làm tính năng này
+         (xem <code>05-gaps.spec.ts</code>).</p>
+      <div id="shadow-host"></div>
+    </section>
+
+    <section class="card">
+      <h2>Trang web nhìn thấy gì</h2>
+      <pre id="log" class="log">(chưa có sự kiện)</pre>
+    </section>
+  </main>
+
+  <script src="./edge-cases.js"></script>
+</body>
+</html>

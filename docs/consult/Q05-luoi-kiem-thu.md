@@ -1,7 +1,7 @@
 ---
 id: Q05
 tiêu_đề: Dựng lưới kiểm thử cho extension + CDP
-trạng_thái: đã-trả-lời
+trạng_thái: đang-áp-dụng
 mức_độ_chặn: quan-trọng
 người_hỏi: Claude
 ngày_hỏi: 2026-08-02
@@ -82,20 +82,32 @@ Thứ hai, và quan trọng hơn: **kiến trúc đúng làm câu hỏi này g�
 - Thêm log `isTrusted` của `focusin` — xác minh trực tiếp khẳng định trung tâm của Q01 (`el.focus()` sinh sự kiện trusted), đúng lời khuyên "mất một phút, đừng lấy lời tôi làm bảo hiểm".
 - `plan.test.ts` — test cho `arrowSteps` (điều hướng select). Đủ tiêu chí "nhiều nhánh, sai lặng lẽ, không cần browser". Để test được thuần, đã tách `arrowSteps` thành hàm số học thuần `(count, from, to)` thay vì nhận `HTMLSelectElement` — refactor này tự nó cũng làm mã sạch hơn.
 
-**Chưa làm — Playwright.** Chỉ thị dự án là không tự dựng browser thật, và chính chuyên gia cũng ghi chú lại điều đó ở cuối câu trả lời. **Cần chủ dự án gật đầu.** Thiết kế đã sẵn sàng, đây là những gì sẽ dựng:
+**Đã dựng xong lưới Playwright** (chủ dự án duyệt 2026-08-02). Ở `packages/e2e/`, chạy bằng `npm run test:e2e` — **23 bài xanh, 2 bài `fixme`, 1.6 phút**; riêng project mặc định ~45s.
 
-| # | Ca | Bắt được lớp lỗi nào |
-|---|---|---|
-| 0 | Smoke: Playwright mở trang → extension attach → dispatch một phím | Chrome bản mới phá vỡ multi-client CDP |
-| 1 | Điền form đủ loại ô + submit + assert recorder toàn trusted | hồi quy toàn tuyến |
-| 2 | Form trong shadow DOM | `activeElement`/`elementFromPoint` sai root |
-| 3 | **Đường fail**: phần tử bị che phải ra lỗi rõ, không gõ nhầm | chính lớp lỗi vừa tốn nhiều lượt gỡ |
-| 4 | SW chết giữa phiên → tái sinh + tái attach | MV3 ~30s idle |
-| 5 | `--lang=en-US` / `vi` / `de-DE` | thứ tự segment ngày trên ba locale |
+| # | Ca | Bắt được lớp lỗi nào | Trạng thái |
+|---|---|---|---|
+| 0 | Smoke: attach + tool xuất hiện qua MCP | multi-client CDP | ✅ |
+| 1 | Điền đủ loại ô + recorder toàn trusted | hồi quy toàn tuyến | ✅ |
+| 2 | Form trong shadow DOM | scanner không xuyên shadow root | ⏸ `fixme` |
+| 3 | **Đường fail**: phần tử bị che, option `disabled` | chính lớp lỗi vừa tốn nhiều lượt gỡ | ✅ |
+| 4 | Server restart → tự nối lại; đóng tab → tool biến mất | stateless-recoverable | ✅ |
+| 5 | `--lang=en-US` / `de-DE` / `ja` | thứ tự segment ngày ba locale | ✅ |
 
-Ca (5) là thứ tôi đánh giá cao nhất và không tự nghĩ ra: ma trận locale tôi tưởng "không test được" hoá ra test được bằng **một tham số dòng lệnh**. Nó nâng phép dò của Q02 từ "tin là đúng" thành "được chứng minh trên ba locale".
+**Lưới bắt được một lỗi thật ngay lần chạy đầu — và đúng ở ca (5), ca tôi không tự nghĩ ra.** Với `--lang=ja` (YMD), gõ `2026-08-20` cho ra `200820-02-06`. Nguyên nhân: **ô năm nhận tới 6 chữ số** (Chrome hỗ trợ tới năm 275760) nên sau `2026` nó *không tự nhảy* sang segment kế, và các chữ số của tháng bị nuốt luôn vào ô năm. Ở MDY/DMY năm đứng cuối nên lỗi không bao giờ lộ ra — đó là lý do nó sống sót qua mọi lần chạy tay và qua cả ba ca nghiệm thu M1.
 
-Ca (3) cũng đáng nói: tôi vừa đầu tư nhiều vào đường fail (`focusElement` xác minh, `assertHits`, hit target interceptor, xác minh từng ô) mà chưa có gì bảo vệ chính đường fail đó khỏi hồi quy.
+Đã sửa: `dateDigits` → `dateKeys`, chèn `ArrowRight` tường minh sau segment năm khi năm không phải segment cuối; kèm unit test khoá lại hành vi.
+
+Điều đáng rút ra không phải con số 6, mà là: **đo đúng thứ tự segment vẫn chưa đủ.** Biết thứ tự rồi vẫn gõ sai được, vì cơ chế tự-nhảy-segment là một tầng hành vi UA-defined khác mà phép dò của tôi không chạm tới. Nguyên tắc "đo, đừng tin" hoá ra phải áp cho *từng* tầng hành vi, không phải một lần cho cả ô ngày.
+
+Ca (2) chuyển thành `test.fixme` sau khi kiểm mã: scanner dùng `root.querySelectorAll`, vốn **không xuyên qua shadow root**, nên form trong shadow DOM chưa bao giờ được phát hiện. Đây là thiếu sót *tính năng*, không phải thiếu test — viết một bài xanh cho nó là tự lừa mình. `test.fixme` sẽ **đỏ ngược lại nếu bất ngờ xanh**, nên ngày làm xong tính năng thì lưới tự nhắc gỡ.
+
+Ca (4) điều chỉnh so với đề xuất: thay vì đợi ~30s cho SW chết (quá đắt so với ngân sách thời gian của cả lưới), tôi test **server khởi động lại** — kịch bản thật hơn (người dùng restart Claude Code), kiểm đúng cùng tính chất stateless-recoverable, và xong trong 6s.
+
+Ca (3) là ca tôi thấy yên tâm nhất khi có: toàn bộ đầu tư vào đường fail (`focusElement` xác minh, `assertHits`, hit target interceptor, xác minh từng ô) giờ đã có lưới giữ. Nó cũng xác nhận cảnh báo của [Q03](Q03-select-popup-native.md) về option `disabled` — vòng bấm-rồi-xác-minh vượt qua ca đó, còn số học Δindex thì đã trượt.
+
+**Hai lỗi hạ tầng lưới tôi tự mắc, ghi lại vì chúng là bẫy chung:**
+- Bật/tắt static server trong `test.afterAll` — `afterAll` chạy theo *từng file spec*, nên file thứ hai mất server. Dùng `webServer` của config.
+- Mở tab mới mỗi bài mà không đóng — mỗi tab là một namespace tool sống, nên hành động bị định tuyến sang tab cũ trong khi assertion đọc tab mới. Bài đỏ vì lý do không liên quan gì tới sản phẩm.
 
 **Câu 1 — nỗi lo chặn của tôi được gỡ theo hai đường độc lập**, và đường thứ hai mới là đường đúng: **kiến trúc test đúng làm câu hỏi biến mất.** Playwright chỉ dựng rạp và quan sát, mọi thao tác đi qua đường sản phẩm thật (harness MCP → server → WS → extension → CDP). Nếu để Playwright click hộ thì bài test không còn kiểm sản phẩm nữa — nó kiểm Playwright. Với vai passive, Playwright không gửi lệnh `Input` nào nên hai bên không giẫm chân nhau bất kể multi-client có kẽ hở gì.
 

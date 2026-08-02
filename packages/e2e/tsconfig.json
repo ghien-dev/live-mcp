@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // DOM cần cho mã chạy trong `page.evaluate` (document, HTMLFormElement…);
+    // chrome cần cho `worker.evaluate` chạy trong service worker của extension.
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "chrome"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowJs": true
+  },
+  "include": ["**/*.ts", "**/*.mjs"]
+}

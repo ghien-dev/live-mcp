@@ -3,3 +3,6 @@ dist/
 *.tsbuildinfo
 .livemcp/
 .DS_Store
+dist-e2e/
+packages/e2e/test-results/
+packages/e2e/playwright-report/

@@ -1,9 +1,15 @@
 import {
   LIVEMCP_WS_HOST,
-  LIVEMCP_WS_PORT,
   type ExtensionToServerMsg,
   type ServerToExtensionMsg,
 } from '@livemcp/protocol';
+
+/**
+ * Cổng WS, nướng vào lúc build (`build.mjs --ws-port`). Mặc định là
+ * `LIVEMCP_WS_PORT` của protocol; lưới E2E build một bản riêng ở cổng khác để
+ * chạy song song với server dev mà không phải tắt gì bằng tay.
+ */
+declare const __LIVEMCP_WS_PORT__: number;
 
 /**
  * WebSocket client tới Local Server.
@@ -42,7 +48,7 @@ export class ServerLink {
     if (this.socket && this.socket.readyState <= WebSocket.OPEN) return;
     this.closed = false;
 
-    const socket = new WebSocket(`ws://${LIVEMCP_WS_HOST}:${LIVEMCP_WS_PORT}`);
+    const socket = new WebSocket(`ws://${LIVEMCP_WS_HOST}:${__LIVEMCP_WS_PORT__}`);
     this.socket = socket;
 
     socket.onopen = () => {

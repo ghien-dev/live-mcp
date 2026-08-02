@@ -5,8 +5,22 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const DIST = join(ROOT, 'dist');
 const watch = process.argv.includes('--watch');
+
+function flag(name, fallback) {
+  const i = process.argv.indexOf(`--${name}`);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
+}
+
+/**
+ * Cổng WS được nướng vào lúc build thay vì đọc lúc chạy.
+ *
+ * Lý do: lưới E2E cần một stack riêng (server + extension) chạy song song với
+ * bản dev mà không giành cổng của nhau — nếu không thì mỗi lần chạy test lại
+ * phải tắt server dev bằng tay, đúng thứ ma sát làm một lưới test chết yểu.
+ */
+const DIST = join(ROOT, flag('outdir', 'dist'));
+const WS_PORT = Number(flag('ws-port', 8787));
 
 const common = {
   bundle: true,
@@ -15,6 +29,7 @@ const common = {
   platform: 'browser',
   sourcemap: watch ? 'inline' : false,
   logLevel: 'info',
+  define: { __LIVEMCP_WS_PORT__: String(WS_PORT) },
 };
 
 const entries = [
@@ -40,6 +55,6 @@ if (watch) {
   for (const e of entries) {
     await build({ ...common, entryPoints: [e.in], outfile: e.out });
   }
-  console.log(`\n✔ extension đã build → ${DIST}`);
+  console.log(`\n✔ extension đã build → ${DIST}  (WS cổng ${WS_PORT})`);
   console.log('  Load unpacked thư mục này ở chrome://extensions (bật Developer mode).');
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  dateDigits,
+  dateKeys,
   interpretProbe,
   nextCandidate,
   ORDER_DMY,
@@ -38,15 +38,34 @@ describe('dò thứ tự segment của ô ngày', () => {
     expect(interpretProbe('linh tinh')).toBeNull();
   });
 
-  it('sinh đúng chuỗi chữ số cần gõ cho từng thứ tự', () => {
-    expect(dateDigits('2026-08-20', ORDER_MDY).join('')).toBe('08202026');
-    expect(dateDigits('2026-08-20', ORDER_DMY).join('')).toBe('20082026');
-    expect(dateDigits('2026-08-20', ORDER_YMD).join('')).toBe('20260820');
+  it('sinh đúng chuỗi phím cần gõ cho từng thứ tự', () => {
+    expect(dateKeys('2026-08-20', ORDER_MDY).join('')).toBe('08202026');
+    expect(dateKeys('2026-08-20', ORDER_DMY).join('')).toBe('20082026');
+  });
+
+  it('locale YMD: phải bấm ArrowRight sau ô năm, không trông chờ tự nhảy', () => {
+    // Ô ngày và tháng nhận tối đa 2 chữ số nên Chrome tự nhảy ngay sau chữ số
+    // thứ hai. Nhưng ô NĂM nhận tới 6 chữ số (Chrome hỗ trợ tới năm 275760), nên
+    // sau '2026' nó vẫn đứng yên chờ thêm — và ở locale YMD năm đứng đầu, nên
+    // các chữ số của tháng bị nuốt luôn vào ô năm.
+    //
+    // Lỗi thật đã bắt được trên Chrome --lang=ja: gõ '20260820' cho ra
+    // '200820-02-06' thay vì '2026-08-20'. Ở MDY/DMY năm đứng cuối nên không bao
+    // giờ lộ ra — đó là lý do nó sống sót qua mọi lần chạy tay.
+    expect(dateKeys('2026-08-20', ORDER_YMD)).toEqual([
+      '2', '0', '2', '6', 'ArrowRight',
+      '0', '8',
+      '2', '0',
+    ]);
+
+    // Năm đứng cuối thì không cần nudge — không được thêm phím thừa.
+    expect(dateKeys('2026-08-20', ORDER_MDY)).not.toContain('ArrowRight');
+    expect(dateKeys('2026-08-20', ORDER_DMY)).not.toContain('ArrowRight');
   });
 
   it('từ chối ngày không đúng dạng ISO thay vì gõ bừa', () => {
-    expect(() => dateDigits('20/08/2026', ORDER_DMY)).toThrow();
-    expect(() => dateDigits('2026-8-2', ORDER_DMY)).toThrow();
+    expect(() => dateKeys('20/08/2026', ORDER_DMY)).toThrow();
+    expect(() => dateKeys('2026-8-2', ORDER_DMY)).toThrow();
   });
 
   it('vòng sửa lỗi vét cạn mọi thứ tự rồi mới chịu thua', () => {

@@ -1,0 +1,15 @@
+{
+  "name": "@livemcp/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node prepare.mjs && playwright test",
+    "test:headed": "node prepare.mjs && playwright test --headed",
+    "install-browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0"
+  }
+}

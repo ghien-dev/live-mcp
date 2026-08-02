@@ -8,13 +8,17 @@
 | [Q02](Q02-input-date-segment.md) | `<input type="date">` và việc nhắm segment | **chặn** | đang-áp-dụng | 2026-08-02 | 2026-08-02 | Fable |
 | [Q03](Q03-select-popup-native.md) | `<select>` và popup native ngoài tầm CDP | quan-trọng | đang-áp-dụng | 2026-08-02 | 2026-08-02 | Fable |
 | [Q04](Q04-khe-ho-do-toa-do.md) | Khe hở giữa lúc đo toạ độ và lúc dispatch | quan-trọng | đang-áp-dụng | 2026-08-02 | 2026-08-02 | Fable |
-| [Q05](Q05-luoi-kiem-thu.md) | Dựng lưới kiểm thử cho extension + CDP | quan-trọng | **chờ-quyết** | 2026-08-02 | 2026-08-02 | Fable |
+| [Q05](Q05-luoi-kiem-thu.md) | Dựng lưới kiểm thử cho extension + CDP | quan-trọng | đang-áp-dụng | 2026-08-02 | 2026-08-02 | Fable |
 | [Q06](Q06-ranh-gioi-chuan-declarative.md) | Trang khai báo bao nhiêu, extension suy luận bao nhiêu | tham-khảo | đang-áp-dụng | 2026-08-02 | 2026-08-02 | Fable |
 
 ## Đang chờ chủ dự án quyết
 
-- **[Q05](Q05-luoi-kiem-thu.md) — dựng lưới E2E Playwright.** Thiết kế đã xong (6 ca, chạy một lệnh, dưới ~60s). Chưa dựng vì chỉ thị dự án cấm tự ý mở browser thật. Phần không cần browser đã làm xong: máy ghi `isTrusted` trên trang demo + test cho điều hướng select.
 - **[Q06](Q06-ranh-gioi-chuan-declarative.md) — chế độ lint/validator trong extension.** Việc mới phát sinh từ câu trả lời, chưa có trong roadmap. Đề xuất đặt ở M4.
+
+## Việc mới lộ ra từ lưới E2E
+
+- **Scanner không xuyên shadow root.** Form khai báo đúng chuẩn nằm trong shadow DOM chưa bao giờ được phát hiện. Không phải ca hiếm: design system nào dùng web component cũng vậy. Đã ghi thành `test.fixme` trong `packages/e2e/tests/05-gaps.spec.ts`.
+- **Ô `time` vẫn suy từ `Intl` thay vì đo.** Đúng lỗi nguyên tắc đã sửa cho ô ngày nhưng chưa sửa cho ô giờ ([Q02](Q02-input-date-segment.md) câu 5). Cũng đã ghi thành `test.fixme`.
 
 ## Đã áp dụng — thay đổi lớn nhất
 

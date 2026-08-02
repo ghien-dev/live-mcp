@@ -111,12 +111,32 @@ export function guessHour12(): boolean {
   );
 }
 
-/** '2026-08-20' + thứ tự segment → chuỗi chữ số cần gõ. */
-export function dateDigits(iso: string, order: DateOrder): string[] {
+/**
+ * '2026-08-20' + thứ tự segment → chuỗi phím cần gõ.
+ *
+ * Không chỉ là chữ số. Chrome tự nhảy sang segment kế tiếp khi segment hiện tại
+ * **không thể nhận thêm chữ số nữa** — với ngày và tháng (tối đa 2 chữ số) thì
+ * điều đó xảy ra ngay sau chữ số thứ hai, nên gõ liền mạch là đúng.
+ *
+ * Nhưng **ô năm nhận tới 6 chữ số** (Chrome hỗ trợ tới năm 275760), nên sau khi
+ * gõ `2026` nó vẫn đứng yên chờ thêm. Ở locale YMD (ja, hu, lt…) năm đứng đầu,
+ * nên các chữ số của tháng bị nuốt luôn vào ô năm: gõ `20260820` cho ra
+ * `200820-02-06` thay vì `2026-08-20`.
+ *
+ * Vì vậy: sau segment năm, nếu nó chưa phải segment cuối thì bấm ArrowRight
+ * tường minh thay vì trông chờ tự nhảy. Với MDY/DMY năm đứng cuối nên không đổi
+ * gì — đó là lý do lỗi này sống sót qua mọi lần chạy tay trước đây.
+ */
+export function dateKeys(iso: string, order: DateOrder): string[] {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
   if (!m) throw new Error(`Ngày "${iso}" phải ở dạng YYYY-MM-DD.`);
   const value = { year: m[1]!, month: m[2]!, day: m[3]! };
-  return order.flatMap((seg) => value[seg].split(''));
+
+  return order.flatMap((seg, i) => {
+    const digits = value[seg].split('');
+    const needsNudge = seg === 'year' && i < order.length - 1;
+    return needsNudge ? [...digits, 'ArrowRight'] : digits;
+  });
 }
 
 export function sameOrder(a: DateOrder, b: DateOrder): boolean {

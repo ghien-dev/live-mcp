@@ -2,7 +2,7 @@ import type { FieldDecl, ToolDecl } from '@livemcp/protocol';
 import type { ActionStep } from '../messages.js';
 import {
   createProbeInput,
-  dateDigits,
+  dateKeys,
   guessHour12,
   markerDigits,
   MARKER_A,
@@ -336,11 +336,11 @@ function dateLikeSteps(htmlType: string, value: string, order: DateOrder): Actio
     const [datePart, timePart] = value.split('T');
     return [
       ...reset,
-      { kind: 'keys', keys: dateDigits(datePart ?? '', order) },
+      { kind: 'keys', keys: dateKeys(datePart ?? '', order) },
       { kind: 'keys', keys: timeKeys(timePart ?? '00:00') },
     ];
   }
-  return [...reset, { kind: 'keys', keys: dateDigits(value, order) }];
+  return [...reset, { kind: 'keys', keys: dateKeys(value, order) }];
 }
 
 // ---------------------------------------------------------------------------

@@ -64,8 +64,24 @@ ghi **sự kiện thật (trusted)** — đó là bằng chứng CDP hoạt đ�
 ## Test
 
 ```bash
-npm test
+npm test              # unit — logic thuần, ~2s
+npm run e2e:setup     # một lần: tải Chromium cho Playwright
+npm run test:e2e      # E2E trên Chrome thật, ~1.6 phút
 ```
 
-Chỉ test những vùng logic thuần dễ hỏng (định tuyến tên tool, chuyển đổi schema).
-Phần tương tác browser kiểm bằng demo-site thủ công theo tiêu chí nghiệm thu từng milestone.
+Hai tầng, phân vai rõ:
+
+| Tầng | Bắt gì | Vì sao ở đó |
+|---|---|---|
+| **Unit** (vitest) | logic thuần nhiều nhánh: schema, định tuyến tên tool, thứ tự segment ngày, bảng phím | nhiều nhánh, sai lặng lẽ, không cần browser |
+| **E2E** (Playwright) | layout, focus thật, CDP thật, locale thật, vòng đời MV3 | **chỉ browser thật mới thấy được lớp lỗi này** |
+
+Ranh giới giữa hai tầng không phải sở thích. jsdom trả `getBoundingClientRect()`
+toàn số 0, nên mọi test layout viết trên DOM giả sẽ **xanh trong khi sản phẩm
+hỏng** — tệ hơn không có test. Browser chính là layout engine: thuê nó, đừng giả nó.
+
+Lưới E2E chạy agent giả nói MCP thật qua đúng đường sản phẩm
+(`agent → MCP → server → WS → extension → CDP → DOM`); Playwright chỉ dựng rạp và
+đọc DOM để assert, không bao giờ tự click hay gõ. Chi tiết: [`packages/e2e/README.md`](packages/e2e/README.md).
+
+Cố ý **không** viết test cho tác vụ thuần giao diện.
