@@ -11,6 +11,7 @@ import {
   type ServerToExtensionMsg,
 } from '@livemcp/protocol';
 import { log } from '../log.js';
+import { verifyHandshake } from './handshake.js';
 
 export interface BridgeHandlers {
   onMessage(msg: ExtensionToServerMsg): void;
@@ -35,7 +36,11 @@ export class ExtensionBridge {
   private keepalive: NodeJS.Timeout | null = null;
   private actionCounter = 0;
 
-  constructor(private readonly handlers: BridgeHandlers) {}
+  constructor(
+    private readonly handlers: BridgeHandlers,
+    /** Token pairing bắt buộc; xem bridge/handshake.ts để biết vì sao. */
+    private readonly token: string,
+  ) {}
 
   start(port = LIVEMCP_WS_PORT): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -50,7 +55,20 @@ export class ExtensionBridge {
         log.error('bridge lỗi:', err);
         reject(err);
       });
-      wss.on('connection', (socket, req) => this.handleConnection(socket, req.socket.remoteAddress));
+      wss.on('connection', (socket, req) => {
+        const verdict = verifyHandshake(
+          { url: req.url, origin: req.headers.origin },
+          this.token,
+        );
+        if (!verdict.ok) {
+          // Hỏng ồn ào (N2): từ chối im lặng thì người dùng ngồi chờ một
+          // extension không bao giờ nối được mà không biết vì sao.
+          log.warn(`từ chối kết nối: ${verdict.reason}`);
+          socket.close(verdict.code, verdict.reason.slice(0, 120));
+          return;
+        }
+        this.handleConnection(socket, req.socket.remoteAddress);
+      });
 
       // Ping đều đặn giữ MV3 service worker sống (§2.3).
       this.keepalive = setInterval(() => {

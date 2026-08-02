@@ -1,5 +1,9 @@
 import { qualifyToolName, type ResourceDecl, type ToolDecl } from '@livemcp/protocol';
 import { fieldsToSchema } from './schema.js';
+import { scrubWebText } from '../mcp/agentText.js';
+
+/** Trần cho chuỗi nằm trong dòng: mô tả tool không được nuốt cả context window. */
+const INLINE_LIMIT = 600;
 
 /**
  * Dịch `ToolDecl` (sự thật DOM do content script chuẩn hoá) sang tool MCP.
@@ -58,23 +62,30 @@ export function buildInputSchema(decl: ToolDecl): JsonSchema {
   return { type: 'object', properties, required };
 }
 
-/** Mô tả agent nhìn thấy: mô tả của trang + các ghi chú vận hành do server thêm. */
+/**
+ * Mô tả agent nhìn thấy: mô tả của trang + các ghi chú vận hành do server thêm.
+ *
+ * Mọi mảnh đến từ trang phải qua `scrubWebText` (M1.5). Ghi chú do server tự
+ * thêm thì không — chúng là lời của server, và trộn lẫn hai nguồn ở đây chính là
+ * thứ khiến sau này không ai biết câu nào do ai viết.
+ */
 export function buildDescription(decl: ToolDecl): string {
-  const parts = [decl.description?.trim() || decl.name];
+  const parts = [scrubWebText(decl.description?.trim() || decl.name, INLINE_LIMIT)];
 
   if (!decl.available) {
-    parts.push(
-      `[HIỆN KHÔNG KHẢ DỤNG: ${decl.unavailableReason ?? 'phần tử đang bị vô hiệu hoá hoặc ẩn'}]`,
-    );
+    const reason = decl.unavailableReason
+      ? scrubWebText(decl.unavailableReason, 200)
+      : 'phần tử đang bị vô hiệu hoá hoặc ẩn';
+    parts.push(`[HIỆN KHÔNG KHẢ DỤNG: ${reason}]`);
   }
   if (decl.confirm) {
-    parts.push(`[CẦN XÁC NHẬN NGƯỜI DÙNG: ${decl.confirm}]`);
+    parts.push(`[CẦN XÁC NHẬN NGƯỜI DÙNG: ${scrubWebText(decl.confirm, 300)}]`);
   }
   if (decl.navigate) {
     parts.push('[Hành động này chuyển sang trang khác; danh sách tool sẽ thay đổi.]');
   }
   if (decl.group) {
-    parts.push(`[Thuộc nhóm workflow: ${decl.group}]`);
+    parts.push(`[Thuộc nhóm workflow: ${scrubWebText(decl.group, 100)}]`);
   }
   return parts.join(' ');
 }
@@ -89,9 +100,10 @@ export function toolDeclToMcpTool(decl: ToolDecl, namespace: string): McpToolSha
 
 /** Vùng `livemcp-resource` → tool `read_*` không tham số (spec §6). */
 export function resourceDeclToMcpTool(res: ResourceDecl, namespace: string): McpToolShape {
+  const description = scrubWebText(res.description?.trim() || res.name, INLINE_LIMIT);
   return {
     name: qualifyToolName(namespace, `read_${res.name}`),
-    description: `${res.description?.trim() || res.name} [Chỉ đọc, không thay đổi gì trên trang.]`,
+    description: `${description} [Chỉ đọc, không thay đổi gì trên trang.]`,
     inputSchema: { ...EMPTY_SCHEMA },
   };
 }

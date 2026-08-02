@@ -22,6 +22,14 @@ function flag(name, fallback) {
 const DIST = join(ROOT, flag('outdir', 'dist'));
 const WS_PORT = Number(flag('ws-port', 8787));
 
+/**
+ * Token nướng sẵn — CHỈ dành cho lưới E2E, nơi không có ai bấm popup.
+ *
+ * Mặc định rỗng: bản người dùng thật luôn đọc token từ popup, để một extension
+ * lỡ phát tán không mang theo chìa khoá vạn năng.
+ */
+const TOKEN = flag('token', '');
+
 const common = {
   bundle: true,
   format: 'iife',
@@ -29,17 +37,22 @@ const common = {
   platform: 'browser',
   sourcemap: watch ? 'inline' : false,
   logLevel: 'info',
-  define: { __LIVEMCP_WS_PORT__: String(WS_PORT) },
+  define: {
+    __LIVEMCP_WS_PORT__: String(WS_PORT),
+    __LIVEMCP_TOKEN__: JSON.stringify(TOKEN),
+  },
 };
 
 const entries = [
   { in: join(ROOT, 'src/sw/index.ts'), out: join(DIST, 'sw.js') },
   { in: join(ROOT, 'src/content/index.ts'), out: join(DIST, 'content.js') },
+  { in: join(ROOT, 'src/popup/index.ts'), out: join(DIST, 'popup.js') },
 ];
 
 async function copyStatic() {
   await mkdir(DIST, { recursive: true });
   await copyFile(join(ROOT, 'manifest.json'), join(DIST, 'manifest.json'));
+  await copyFile(join(ROOT, 'src/popup/popup.html'), join(DIST, 'popup.html'));
 }
 
 await rm(DIST, { recursive: true, force: true });

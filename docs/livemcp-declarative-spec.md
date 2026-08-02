@@ -1,9 +1,14 @@
-# Chuẩn Live MCP Declarative — Đặc Tả v1.0 (Draft)
+# Chuẩn Live MCP Declarative — Đặc Tả v0.9-draft
 
 > Tài liệu dành cho developer xây dựng **trang web mới** theo chuẩn Live MCP Declarative.
 > Đọc xong tài liệu này, bạn phải tự đánh dấu (annotate) được toàn bộ trang web của mình
 > để AI Agent điều khiển được 100% qua declarative — không cần viết một dòng JavaScript
 > đăng ký tool nào.
+
+> **Đây là bản draft, và nhãn đó là thật.** Chuẩn sẽ còn đổi cho tới khi đạt hai
+> điều kiện ở [`livemcp-roadmap.md`](livemcp-roadmap.md) mục 3.4: có validator, và
+> có 2–3 trang thật áp dụng mà không ép spec phải đổi thêm. Bản trước mang số
+> `1.0` — một lời hứa ổn định mà dự án chưa giữ được, nên đã hạ nhãn.
 
 ---
 
@@ -12,14 +17,25 @@
 ### 1.1 Nguyên tắc nền tảng
 
 1. **Thuần declarative.** Trang web chỉ *khai báo* khả năng tương tác bằng HTML attributes. Không có `registerTool()`, không có Imperative API.
-2. **Agent tương tác như con người.** Mọi hành động của agent là chuột + bàn phím giả lập (qua Live MCP Extension). Nếu con người làm được workflow không cần gọi JS, agent cũng phải làm được.
+2. **Agent tương tác như con người.** Mọi hành động của agent là chuột + bàn phím giả lập (qua Live MCP Extension). Nếu con người làm được workflow không cần gọi JS, agent cũng phải làm được — **với điều kiện ở 1.1.1 dưới đây.**
 3. **DOM mới sinh ra từ tương tác — không tự sinh.** Mọi phần tử động (dropdown items, modal, kết quả search...) đều sinh ra *sau một hành động*. Vì vậy agent chỉ cần: **hành động → đợi → đọc declarative mới → hành động tiếp**. Đây là vòng lặp cốt lõi của chuẩn.
 4. **Khai báo là hợp đồng.** Attribute `livemcp-*` là hợp đồng giữa trang web và agent: trang web cam kết "sau hành động X, phần tử thỏa selector Y sẽ xuất hiện / trạng thái Z sẽ đổi". Extension và Server chỉ việc thi hành hợp đồng đó.
+
+### 1.1.1 Điều kiện của nguyên tắc 2 — agent không có mắt
+
+Nguyên tắc 2 nghe như một hệ quả hiển nhiên, nhưng nó **không đúng vô điều kiện**, và chỗ hổng nằm ở một thứ con người mang theo mà agent không có: **kênh hồi phục bằng mắt**. Người điền sai ô thì *nhìn thấy* viền đỏ và tự sửa; agent chỉ có declarative làm giác quan. Trang truyền tín hiệu thuần thị giác — lỗi validation chỉ đổi màu viền, trạng thái chỉ hiện bằng icon, tiến trình chỉ là một spinner — là điểm mù đúng nghĩa.
+
+Vì vậy điều kiện phải phát biểu thẳng, và nó là **tiền đề**, không phải khuyến nghị:
+
+> **Mọi tín hiệu mà người dùng cần nhìn thấy để ra quyết định phải tồn tại dưới dạng text hoặc attribute.**
+
+Cụ thể: lỗi validation phải có text lỗi (không chỉ `border: red`); trạng thái xử lý phải có `livemcp-state` hoặc text (không chỉ spinner); kết quả phải có `livemcp-result` (không chỉ một dấu tích xanh). Trang nào không thoả điều kiện này thì nguyên tắc 2 không áp dụng cho nó — và agent sẽ hỏng, đúng như dự đoán, chứ không phải vì chuẩn sai.
 
 ### 1.2 Phạm vi
 
 - **Trong phạm vi:** web app xây mới từ đầu theo chuẩn (greenfield), gồm cả app dùng Canvas/WebGL nếu thiết kế theo mục 8.
 - **Ngoài phạm vi:** retrofit web có sẵn không kiểm soát được mã nguồn; nội dung cross-origin iframe không theo chuẩn.
+- **Ngoài phạm vi ở major hiện tại — ba loại tương tác:** `contenteditable`/rich-text editor (IME, định dạng), drag-and-drop thật, slider tuỳ chế bằng `div`+`pointerdown`. Con người làm được chúng không cần JS của trang, nhưng đường bàn phím chưa phủ được. Khai ranh giới ra đây là **quyết định có ý thức**; giấu nó đi thì nó trở thành lỗ hổng chờ người dùng đầu tiên phát hiện. Cần một trong ba? Hãy cung cấp thêm một đường thao tác bằng bàn phím cho cùng chức năng — đó cũng là điều accessibility đòi hỏi.
 
 ### 1.3 Quan hệ với Chrome WebMCP
 
@@ -33,7 +49,7 @@ Mọi trang theo chuẩn **bắt buộc** có meta khai báo để Extension nh�
 
 ```html
 <head>
-  <meta name="livemcp" content="1.0">
+  <meta name="livemcp" content="0">
   <meta name="livemcp-app" content="BookMyTable">
   <meta name="livemcp-description"
         content="Ứng dụng đặt bàn nhà hàng. Cho phép tìm nhà hàng, xem menu, đặt bàn, hủy bàn.">
@@ -42,9 +58,19 @@ Mọi trang theo chuẩn **bắt buộc** có meta khai báo để Extension nh�
 
 | Meta | Bắt buộc | Ý nghĩa |
 |---|---|---|
-| `livemcp` | ✅ | Phiên bản chuẩn trang tuân theo. Không có meta này → Extension bỏ qua trang. |
+| `livemcp` | ✅ | **Major** của chuẩn trang tuân theo. Không có meta này → Extension bỏ qua trang. |
 | `livemcp-app` | ✅ | Tên app, dùng làm prefix định danh MCP server (`livemcp:bookmytable`). |
 | `livemcp-description` | ✅ | Mô tả tổng quan để agent hiểu ngữ cảnh trước khi thấy tool nào. |
+
+### 2.1 Vì sao chỉ khai major
+
+Trong cùng một major, mọi thứ **bắt buộc** tương thích — nên minor không phải thứ trang cần khai, và bắt khai sẽ tạo ra một con số phải bảo trì mà không đổi lấy gì.
+
+Ba quy tắc tiến hoá đi kèm, ràng cả hai phía:
+
+1. **Phía chuẩn — additive trong một major.** Attribute mới luôn optional và có default an toàn. Đổi nghĩa hay bỏ một attribute là việc của major mới.
+2. **Phía consumer (Extension) — hai cam kết.** Gặp attribute `livemcp-*` không biết → **bỏ qua, không bao giờ fail**. Gặp major lạ → **nói rõ** ("trang khai spec v2, extension này hiểu v0") thay vì im lặng quét bằng luật sai.
+3. **Kênh di trú là validator.** Thứ gì bị deprecated sẽ được validator cảnh báo trước một chặng dài, rồi mới bỏ ở major sau.
 
 ---
 
@@ -527,7 +553,7 @@ Trang của bạn đạt chuẩn Live MCP Declarative khi:
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <meta name="livemcp" content="1.0">
+  <meta name="livemcp" content="0">
   <meta name="livemcp-app" content="ShopViet">
   <meta name="livemcp-description" content="Cửa hàng điện tử: tìm kiếm, xem, thêm giỏ, thanh toán.">
   <title>ShopViet</title>
@@ -573,4 +599,4 @@ Tool list mà agent nhìn thấy từ trang này: `search_products(text)`, `add_
 
 ---
 
-*Đặc tả v1.0 draft — biên soạn cho dự án Live MCP, 31/07/2026.*
+*Đặc tả v0.9-draft — biên soạn cho dự án Live MCP, 31/07/2026; hạ nhãn khỏi `1.0` ngày 02/08/2026 (xem `livemcp-roadmap.md` R05).*

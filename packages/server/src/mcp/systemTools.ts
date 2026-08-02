@@ -1,6 +1,7 @@
 import type { SessionStore } from '../store/sessions.js';
 import type { McpToolShape } from '../parser/tools.js';
 import { qualifyToolName } from '@livemcp/protocol';
+import { scrubWebText } from './agentText.js';
 
 /**
  * Tool hệ thống do server tự expose, không đến từ trang web
@@ -56,12 +57,13 @@ export function callSystemTool(
       if (sites.length === 0) {
         return 'Chưa có trang chuẩn Live MCP nào đang mở. Hãy mở một trang có <meta name="livemcp"> trong Chrome (extension Live MCP phải đang bật).';
       }
+      // `app`, `url`, `description` đến từ meta tag của trang → phải qua một cửa.
       return sites
         .map(
           (s) =>
-            `• ${s.app} (namespace: ${s.namespace}, tab ${s.tabId})\n` +
-            `  URL: ${s.url}\n` +
-            `  Mô tả: ${s.description}\n` +
+            `• ${scrubWebText(s.app, 120)} (namespace: ${s.namespace}, tab ${s.tabId})\n` +
+            `  URL: ${scrubWebText(s.url, 300)}\n` +
+            `  Mô tả: ${scrubWebText(s.description, 600)}\n` +
             `  Tool: ${s.tools.size} · Resource: ${s.resources.size}`,
         )
         .join('\n\n');
@@ -81,13 +83,15 @@ export function callSystemTool(
           const tools = [...site.tools.values()].map(
             (t) =>
               `  - ${qualifyToolName(site.namespace, t.name)}` +
-              `${t.available ? '' : ' (không khả dụng)'}: ${t.description}`,
+              `${t.available ? '' : ' (không khả dụng)'}: ${scrubWebText(t.description, 600)}`,
           );
           const resources = [...site.resources.values()].map(
-            (r) => `  - ${qualifyToolName(site.namespace, `read_${r.name}`)}: ${r.description}`,
+            (r) =>
+              `  - ${qualifyToolName(site.namespace, `read_${r.name}`)}: ` +
+              scrubWebText(r.description, 600),
           );
           return (
-            `${site.app} (${site.namespace}):\n` +
+            `${scrubWebText(site.app, 120)} (${site.namespace}):\n` +
             (tools.length ? `${tools.join('\n')}\n` : '  (chưa có tool nào)\n') +
             (resources.length ? `${resources.join('\n')}` : '')
           );

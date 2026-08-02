@@ -7,7 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { E2E_WS_PORT, EXT_DIST_DIR } from './fixtures/ports.mjs';
+import { E2E_TOKEN, E2E_WS_PORT, EXT_DIST_DIR } from './fixtures/ports.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
@@ -25,7 +25,16 @@ run('npm', ['run', 'build', '-w', '@livemcp/server'], ROOT);
 console.log(`› build extension cho E2E (cổng ${E2E_WS_PORT}) → ${EXT_DIST_DIR}…`);
 run(
   'node',
-  ['build.mjs', '--outdir', EXT_DIST_DIR, '--ws-port', String(E2E_WS_PORT)],
+  [
+    'build.mjs',
+    '--outdir',
+    EXT_DIST_DIR,
+    '--ws-port',
+    String(E2E_WS_PORT),
+    // Nướng token vào bản test: không có ai bấm popup giữa lúc chạy Playwright.
+    '--token',
+    E2E_TOKEN,
+  ],
   join(ROOT, 'packages', 'extension'),
 );
 

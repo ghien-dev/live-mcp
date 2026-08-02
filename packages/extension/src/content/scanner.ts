@@ -1,4 +1,12 @@
-import type { FieldDecl, LiveMcpAction, ResourceDecl, ToolDecl } from '@livemcp/protocol';
+import {
+  SPEC_MAJOR,
+  SPEC_VERSION,
+  specMajorOf,
+  type FieldDecl,
+  type LiveMcpAction,
+  type ResourceDecl,
+  type ToolDecl,
+} from '@livemcp/protocol';
 
 /**
  * Scanner: DOM → ToolDecl. Đây là nơi DUY NHẤT trong hệ thống hiểu ý nghĩa của
@@ -233,6 +241,36 @@ export function scan(root: Document = document): ScanResult {
   return { tools, resources, registry };
 }
 
+/**
+ * HỢP ĐỒNG TƯƠNG THÍCH NGƯỢC PHÍA CONSUMER (docs/livemcp-roadmap.md R05).
+ *
+ * Hai vế, và vế nào cũng phải có mặt TRƯỚC KHI tồn tại bất kỳ "trang cũ" nào —
+ * tức là bây giờ, lúc số trang áp dụng đúng bằng 0:
+ *
+ *   1. Attribute `livemcp-*` lạ → BỎ QUA, không bao giờ fail. Đây là hành vi mặc
+ *      định của scanner (chỉ đọc các attribute nó biết), nên không cần mã —
+ *      nhưng cần được ghi ra để lần sửa sau không ai "chặt chẽ hoá" nó thành lỗi.
+ *   2. Major spec lạ → NÓI TO. Im lặng quét bằng luật của major khác là kiểu
+ *      hỏng tệ nhất: agent thao tác sai mà không ai biết vì sao (N2).
+ */
+function warnOnSpecMajorMismatch(raw: string): void {
+  const major = specMajorOf(raw);
+  if (major === null) {
+    console.warn(
+      `[Live MCP] <meta name="livemcp" content="${raw}"> không đọc được số phiên bản. ` +
+        `Extension này hiểu spec v${SPEC_MAJOR} (${SPEC_VERSION}).`,
+    );
+    return;
+  }
+  if (major !== SPEC_MAJOR) {
+    console.error(
+      `[Live MCP] Trang khai spec v${major}, extension này hiểu v${SPEC_MAJOR} ` +
+        `(${SPEC_VERSION}). Vẫn quét tiếp, nhưng hành vi có thể sai — ` +
+        'hãy cập nhật extension hoặc kiểm lại meta tag của trang.',
+    );
+  }
+}
+
 /** Ba meta cấp trang bắt buộc (spec §2). Thiếu `livemcp` → trang ngoài chuẩn. */
 export function readPageInfo(root: Document = document): {
   specVersion: string;
@@ -244,6 +282,8 @@ export function readPageInfo(root: Document = document): {
     ?.getAttribute('content')
     ?.trim();
   if (!specVersion) return null;
+
+  warnOnSpecMajorMismatch(specVersion);
 
   return {
     specVersion,

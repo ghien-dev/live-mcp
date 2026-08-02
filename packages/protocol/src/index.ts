@@ -6,11 +6,45 @@
  */
 
 export const PROTOCOL_VERSION = '1.0';
-export const SPEC_VERSION = '1.0';
+
+/**
+ * Phiên bản chuẩn declarative. **Đang là draft, cố ý.**
+ *
+ * Nhãn `1.0` trước đây phát tín hiệu sai: nó là lời hứa ổn định mà dự án chưa
+ * muốn giữ — bằng chứng là §9.5 được thêm vào spec sau khi đã mang số 1.0.
+ * Đổi nhãn bây giờ rẻ; đổi sau khi có trang thật áp dụng thì đắt
+ * (docs/livemcp-roadmap.md R05).
+ */
+export const SPEC_VERSION = '0.9-draft';
+
+/**
+ * Major mà extension này hiểu. Trang chỉ khai major trong `<meta name="livemcp">`
+ * — trong cùng một major, mọi thứ phải tương thích (quy tắc tiến hoá additive),
+ * nên minor không phải thứ trang cần khai.
+ */
+export const SPEC_MAJOR = 0;
+
+/**
+ * Đọc major từ nhãn spec của trang. Chấp nhận `"0"`, `"0.9-draft"`, `"1.0"`.
+ * Trả `null` khi không đọc được số — gọi là "không rõ", không đoán bừa.
+ */
+export function specMajorOf(raw: string): number | null {
+  const m = /^\s*v?(\d+)/.exec(raw);
+  if (!m) return null;
+  return Number(m[1]);
+}
 
 /** WS hub của Local Server. Chỉ bind 127.0.0.1 (docs/livemcp-architecture.md §6.3.1). */
 export const LIVEMCP_WS_PORT = 8787;
 export const LIVEMCP_WS_HOST = '127.0.0.1';
+
+/**
+ * Tên query param mang token pairing trong URL WebSocket.
+ *
+ * Vì sao token nằm ở URL chứ không ở header: WebSocket từ trình duyệt không đặt
+ * được header tuỳ ý. URL này chỉ đi tới 127.0.0.1 nên không rời khỏi máy.
+ */
+export const TOKEN_QUERY_PARAM = 'token';
 
 /** Ping keepalive giữ MV3 service worker sống (§2.3). Phải < 30s. */
 export const KEEPALIVE_INTERVAL_MS = 20_000;

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { E2E_TOKEN } from './ports.mjs';
 
 /**
  * Agent giả: nói MCP qua stdio với Local Server thật.
@@ -49,7 +50,12 @@ export class McpAgent {
     this.proc = spawn(
       process.execPath,
       [this.serverEntry, '--stdio', '--ws-port', String(this.wsPort)],
-      { stdio: ['pipe', 'pipe', 'pipe'] },
+      {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        // Token cố định của lưới (M1.5). Qua env chứ không qua file người dùng:
+        // chạy test không được đụng vào `~/.livemcp/token` của người thật.
+        env: { ...process.env, LIVEMCP_TOKEN: E2E_TOKEN },
+      },
     );
 
     createInterface({ input: this.proc.stdout }).on('line', (line) => this.onLine(line));

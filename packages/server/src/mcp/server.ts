@@ -10,6 +10,7 @@ import type { ExtensionBridge } from '../bridge/hub.js';
 import type { SessionStore, SiteSession } from '../store/sessions.js';
 import { resourceDeclToMcpTool, toolDeclToMcpTool, type McpToolShape } from '../parser/tools.js';
 import { callSystemTool, isSystemTool, systemToolShapes } from './systemTools.js';
+import { isValidToolName, scrubStructured, scrubWebText, toAgentText } from './agentText.js';
 import { log } from '../log.js';
 
 /** Gộp nhiều thay đổi declarative liên tiếp thành một thông báo cho agent. */
@@ -57,9 +58,22 @@ function collectTools(store: SessionStore): McpToolShape[] {
   const tools: McpToolShape[] = [...systemToolShapes];
   for (const session of store.list()) {
     for (const decl of session.tools.values()) {
+      // Tên tool cũng do trang đặt và đi thẳng vào tools/list. Tên lạ bị loại
+      // KÈM LOG — im lặng bỏ tool sẽ khiến tác giả trang ngồi tìm mãi không ra.
+      if (!isValidToolName(decl.name)) {
+        log.warn(
+          `bỏ tool tên không hợp lệ trên ${session.app}: ${JSON.stringify(decl.name.slice(0, 60))}` +
+            ' — chỉ nhận chữ, số, gạch dưới và gạch nối.',
+        );
+        continue;
+      }
       tools.push(toolDeclToMcpTool(decl, session.namespace));
     }
     for (const res of session.resources.values()) {
+      if (!isValidToolName(res.name)) {
+        log.warn(`bỏ resource tên không hợp lệ trên ${session.app}.`);
+        continue;
+      }
       tools.push(resourceDeclToMcpTool(res, session.namespace));
     }
   }
@@ -107,11 +121,10 @@ async function callSiteTool(
     );
   }
   if (!decl.available) {
-    return textResult(
-      `Tool "${qualified}" hiện không khả dụng: ` +
-        `${decl.unavailableReason ?? 'phần tử đang bị vô hiệu hoá hoặc ẩn'}.`,
-      true,
-    );
+    const reason = decl.unavailableReason
+      ? scrubWebText(decl.unavailableReason, 200)
+      : 'phần tử đang bị vô hiệu hoá hoặc ẩn';
+    return textResult(`Tool "${qualified}" hiện không khả dụng: ${reason}.`, true);
   }
 
   const validationError = validateArgs(decl, args);
@@ -138,7 +151,7 @@ function validateArgs(decl: ToolDecl, args: Record<string, unknown>): string | n
     if (!arg.values.includes(String(value))) {
       return (
         `Giá trị "${String(value)}" không có trên trang cho tham số "${arg.name}". ` +
-        `Các giá trị hợp lệ hiện tại: ${arg.values.join(', ')}`
+        `Các giá trị hợp lệ hiện tại: ${scrubWebText(arg.values.join(', '), 800)}`
       );
     }
   }
@@ -166,43 +179,51 @@ function validateArgs(decl: ToolDecl, args: Record<string, unknown>): string | n
 function formatActionResult(result: ActionResultMsg, session: SiteSession) {
   const lines: string[] = [];
 
+  /** Text do TRANG sinh ra → khối có nhãn nguồn. Text do server sinh ra thì không. */
+  const fromPage = (raw: string) => toAgentText(raw, { source: session.app });
+
   switch (result.status) {
     case 'ok':
-      lines.push(result.resultText?.trim() || 'Hành động đã thực hiện xong.');
+      lines.push(
+        result.resultText?.trim()
+          ? fromPage(result.resultText.trim())
+          : 'Hành động đã thực hiện xong.',
+      );
       break;
     case 'navigated':
-      lines.push(`Trang đã điều hướng tới ${result.url ?? '(không rõ URL)'}.`);
-      if (result.resultText) lines.push(result.resultText.trim());
+      lines.push(`Trang đã điều hướng tới ${scrubWebText(result.url ?? '(không rõ URL)', 300)}.`);
+      if (result.resultText) lines.push(fromPage(result.resultText.trim()));
       break;
     case 'timeout':
       lines.push(
         `⏱ Hết thời gian đợi. ${result.error ?? ''}`.trim(),
         result.stateSnapshot
-          ? `Trạng thái vùng đợi lúc này: ${result.stateSnapshot}`
+          ? `Trạng thái vùng đợi lúc này: ${scrubWebText(result.stateSnapshot, 200)}`
           : 'Không đọc được trạng thái vùng đợi.',
         'Bạn có thể thử lại, hoặc gọi livemcp_get_tools để xem trang đang ở đâu.',
       );
       break;
     case 'error':
-      lines.push(`✖ Không thực hiện được: ${result.error ?? 'lỗi không rõ'}`);
+      // Lời báo lỗi của extension có nhúng mô tả phần tử lấy từ trang → vẫn là
+      // text nửa-từ-web, không được miễn kiểm.
+      lines.push(`✖ Không thực hiện được: ${scrubWebText(result.error ?? 'lỗi không rõ', 800)}`);
       break;
   }
 
-  if (result.newTools?.length) {
-    lines.push(
-      `\nTool mới xuất hiện sau hành động này: ` +
-        result.newTools.map((t) => `${session.namespace}__${t}`).join(', '),
-    );
-  }
-  if (result.goneTools?.length) {
-    lines.push(
-      `Tool không còn nữa: ` + result.goneTools.map((t) => `${session.namespace}__${t}`).join(', '),
-    );
-  }
+  const qualifyValid = (names: string[]) =>
+    names.filter(isValidToolName).map((t) => `${session.namespace}__${t}`);
+
+  const added = qualifyValid(result.newTools ?? []);
+  const gone = qualifyValid(result.goneTools ?? []);
+  if (added.length) lines.push(`\nTool mới xuất hiện sau hành động này: ${added.join(', ')}`);
+  if (gone.length) lines.push(`Tool không còn nữa: ${gone.join(', ')}`);
 
   const payload = textResult(lines.join('\n'), result.status === 'error');
   if (result.structured !== undefined) {
-    return { ...payload, structuredContent: result.structured as Record<string, unknown> };
+    return {
+      ...payload,
+      structuredContent: scrubStructured(result.structured) as Record<string, unknown>,
+    };
   }
   return payload;
 }

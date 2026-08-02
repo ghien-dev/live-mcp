@@ -7,6 +7,10 @@
   "background": {
     "service_worker": "sw.js"
   },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Live MCP — token pairing & trạng thái"
+  },
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],

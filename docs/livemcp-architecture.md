@@ -290,12 +290,23 @@ new MutationObserver(muts => scheduleRescan(muts)).observe(document.documentElem
 
 ### 6.3 Policy layer (bảo mật — không được cắt xén khi triển khai)
 
-1. **WS chỉ bind `127.0.0.1`.** Handshake yêu cầu token: server sinh token lần chạy đầu, user dán vào popup extension một lần (chống website local khác giả làm extension).
-2. **Origin allowlist:** lần đầu gặp một origin mới, extension hỏi user "Cho phép agent điều khiển shopviet.vn?" — lưu quyết định. Không allowlist → không quét, không thi hành.
-3. **Confirm gate:** tool có `confirm` → `tools/call` trả về yêu cầu xác nhận (MCP elicitation nếu client hỗ trợ; fallback: trả message yêu cầu agent hỏi user rồi gọi lại với `confirmed: true` — cờ này do server thêm vào schema, và server chỉ chấp nhận sau khi đã phát yêu cầu xác nhận tương ứng).
-4. **Sanitize declarative trước khi đưa vào description tool:** cắt độ dài, strip các mẫu chỉ thị ("ignore previous instructions"...), escape markdown. Mọi text từ web là **dữ liệu không tin cậy** — nguy cơ chính của kiến trúc này là prompt injection từ trang web độc, phải xử lý ở server (chốt chặn duy nhất trước agent).
+> **Sửa mô hình đe doạ, 02/08/2026.** Bản đầu của mục này ngầm coi `127.0.0.1` là
+> một biên giới: chỉ *tiến trình local* mới nối vào được. Sai. Handshake WebSocket
+> không bị CORS chặn, nên **bất kỳ trang web nào** đang mở trong bất kỳ trình
+> duyệt nào cũng mở được `ws://127.0.0.1:8787`. Đây là kịch bản drive-by thật, và
+> nó đã mở suốt từ M0 tới M1. Vì vậy mục 1 và 4 dưới đây **đã được kéo lên M1.5**,
+> không còn nằm ở M4 (xem `livemcp-roadmap.md` R02).
+
+1. ✅ **WS chỉ bind `127.0.0.1`, và handshake có hai lớp.** *(M1.5 — đã làm)*
+   - **Token** = xác thực: server sinh token lần chạy đầu, lưu `~/.livemcp/token`, user dán vào popup extension một lần. Chặn tiến trình local tuỳ ý.
+   - **Chặn origin web** = chặn đúng lớp tấn công trên: yêu cầu upgrade mang `Origin: http(s)://…` bị từ chối. Trang web **không giả mạo được** header này, nên đây là bộ lọc mà kẻ tấn công qua trình duyệt không lách được kể cả khi đoán đúng cổng.
+   - Hai lớp có vai khác nhau, cố ý không gộp. Mã: `server/src/bridge/handshake.ts`.
+2. **Origin allowlist:** lần đầu gặp một origin mới, extension hỏi user "Cho phép agent điều khiển shopviet.vn?" — lưu quyết định. Không allowlist → không quét, không thi hành. *(M4)*
+3. **Confirm gate:** tool có `confirm` → `tools/call` trả về yêu cầu xác nhận (MCP elicitation nếu client hỗ trợ; fallback: trả message yêu cầu agent hỏi user rồi gọi lại với `confirmed: true` — cờ này do server thêm vào schema, và server chỉ chấp nhận sau khi đã phát yêu cầu xác nhận tương ứng). *(M4)*
+4. ✅ **Một cửa duy nhất cho text từ web.** *(M1.5 — đã làm)* Mọi chuỗi từ trang đi tới agent qua `server/src/mcp/agentText.ts`: cắt trần, gỡ ký tự vô hình/bidi, vô hiệu hoá code fence, gắn nhãn nguồn. Giá trị nằm ở chỗ **có đúng một cửa**, không ở độ tinh vi của bộ lọc — M4 làm giàu nội dung lọc mà không phải truy lại từng đường text.
+   **Và phải nhớ:** không tồn tại phòng thủ kín cho prompt injection. Strip mẫu chỉ thị ("ignore previous instructions"…) là trò mèo vờn chuột. Sanitizer giảm **xác suất**; thứ chặn **trần thiệt hại** là danh sách hành động agent được phép — confirm gate, allowlist, rate limit. Câu thiết kế đúng không phải *"lọc được chưa"* mà là ***"nếu injection thành công, nó làm được tối đa những gì?"***
 5. **Từ chối type vào `input[type=password]`** trừ khi user bật rõ trong settings.
-6. Rate limit hành động (mặc định ~2 action/giây/tab) — vừa an toàn vừa khớp nhịp con ong.
+6. Rate limit hành động (mặc định ~2 action/giây/tab) — vừa an toàn vừa khớp nhịp con ong. *(M4)*
 
 ### 6.4 Tool hệ thống (server tự expose, không đến từ web)
 
@@ -336,6 +347,12 @@ livemcp/
 ---
 
 ## 8. Thứ tự triển khai khuyến nghị (điều chỉnh từ roadmap nghiên cứu)
+
+> **Mục này đã bị thay thế.** Lộ trình đang thi hành nằm ở
+> [`livemcp-roadmap.md`](livemcp-roadmap.md) — nó giữ nguyên tinh thần bên dưới
+> nhưng chèn thêm **M1.5** (vệ sinh bảo mật), **M2.5** (chạm thực địa) và
+> **M3.5** (validator), kèm lý do từng chỗ lệch. Giữ lại mục này để so chiếu,
+> không phải để làm theo.
 
 Nguyên tắc: **dựng xương sống end-to-end mỏng nhất trước**, con ong và các action phụ làm sau.
 

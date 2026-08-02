@@ -57,6 +57,21 @@ export interface PlanReply {
   error?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Popup ↔ Service Worker (M1.5 — token pairing)
+// ---------------------------------------------------------------------------
+
+export type PopupToSw =
+  | { type: 'popup_get_status' }
+  | { type: 'popup_set_token'; token: string };
+
+export interface PopupStatus {
+  connected: boolean;
+  hasToken: boolean;
+  /** Số tab đang mở trang chuẩn Live MCP — giúp phân biệt "chưa nối" với "nối rồi mà chưa có site". */
+  siteCount: number;
+}
+
 export interface AfterActionReply {
   /**
    * 'retry' = trang chưa đúng ý (vd ô ngày nhận sai thứ tự dd/mm) và content

@@ -13,7 +13,8 @@ import type {
   SwToContent,
 } from '../messages.js';
 import { click, detach, ensureAttached, insertText, pressKey, selectAll } from './cdp.js';
-import { ServerLink } from './ws.js';
+import { ServerLink, TOKEN_STORAGE_KEY } from './ws.js';
+import type { PopupToSw, PopupStatus } from '../messages.js';
 
 /**
  * Service Worker — người điều phối.
@@ -34,6 +35,35 @@ link.connect();
 // ---------------------------------------------------------------------------
 // Content script → SW
 // ---------------------------------------------------------------------------
+
+// Popup: dán token pairing (M1.5). Popup không có `sender.tab` nên phải xử lý
+// TRƯỚC lá chắn tabId bên dưới.
+chrome.runtime.onMessage.addListener((msg: PopupToSw, sender, sendResponse) => {
+  if (sender.tab || !msg?.type?.startsWith('popup_')) return;
+
+  if (msg.type === 'popup_get_status') {
+    void chrome.storage.local.get(TOKEN_STORAGE_KEY).then((stored) => {
+      const status: PopupStatus = {
+        connected: link.connected,
+        hasToken: Boolean(stored[TOKEN_STORAGE_KEY]),
+        siteCount: sites.size,
+      };
+      sendResponse(status);
+    });
+    return true; // giữ kênh mở cho phản hồi bất đồng bộ
+  }
+
+  if (msg.type === 'popup_set_token') {
+    void chrome.storage.local
+      .set({ [TOKEN_STORAGE_KEY]: msg.token.trim() })
+      .then(() => {
+        link.retryNow();
+        sendResponse({ ok: true });
+      });
+    return true;
+  }
+  return;
+});
 
 chrome.runtime.onMessage.addListener((msg: ContentToSw, sender) => {
   const tabId = sender.tab?.id;

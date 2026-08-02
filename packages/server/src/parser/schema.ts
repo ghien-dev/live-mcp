@@ -1,5 +1,6 @@
 import type { FieldDecl } from '@livemcp/protocol';
 import type { JsonSchema } from './tools.js';
+import { scrubWebText } from '../mcp/agentText.js';
 
 /**
  * Bảng chuyển đổi HTML → JSON Schema (docs/livemcp-declarative-spec.md §4).
@@ -37,7 +38,7 @@ function isIntegerField(field: FieldDecl): boolean {
 
 function fieldToProperty(field: FieldDecl): Record<string, unknown> {
   const prop: Record<string, unknown> = {};
-  if (field.description) prop.description = field.description;
+  if (field.description) prop.description = scrubWebText(field.description, 400);
 
   switch (field.htmlType) {
     case 'number':
@@ -57,6 +58,11 @@ function fieldToProperty(field: FieldDecl): Record<string, unknown> {
     case 'select':
     case 'radio-group':
       prop.type = 'string';
+      // KHÔNG scrub `enum`: đây là giá trị định danh phải khớp chính xác với
+      // option trên trang, và với `validateArgs` phía server. Làm sạch ở đây mà
+      // không làm sạch ở nguồn sẽ khiến agent gửi giá trị đã bị sửa rồi bị chính
+      // ta từ chối. Chỗ đúng để chuẩn hoá là content script — ghi ở bảng nợ kỹ
+      // thuật của lộ trình, thuộc M4.
       if (field.options?.length) prop.enum = [...field.options];
       break;
 

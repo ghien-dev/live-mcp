@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <title>Live MCP</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        width: 320px;
+        margin: 0;
+        padding: 14px;
+        font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      h1 { font-size: 14px; margin: 0 0 10px; }
+      .status { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: #b0b0b0; flex: none; }
+      .dot.on { background: #1e9e52; }
+      .dot.off { background: #d1453b; }
+      label { display: block; font-weight: 600; margin-bottom: 4px; }
+      input {
+        width: 100%; box-sizing: border-box; padding: 6px 7px;
+        font: 12px/1.4 ui-monospace, Consolas, monospace;
+        border: 1px solid #8884; border-radius: 5px; background: Field; color: FieldText;
+      }
+      button {
+        margin-top: 8px; width: 100%; padding: 7px;
+        font: inherit; font-weight: 600; cursor: pointer;
+        border: 0; border-radius: 5px; background: #2f6fed; color: #fff;
+      }
+      button:disabled { opacity: .5; cursor: default; }
+      .hint { margin-top: 10px; color: #8a8a8a; font-size: 12px; }
+      code { font-family: ui-monospace, Consolas, monospace; }
+      .saved { margin-top: 8px; color: #1e9e52; font-weight: 600; }
+      .saved:empty { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Live MCP</h1>
+
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="statusText">đang kiểm tra…</span>
+    </div>
+
+    <label for="token">Token pairing</label>
+    <input id="token" type="password" autocomplete="off" spellcheck="false"
+           placeholder="dán token từ Local Server" />
+    <button id="save">Lưu &amp; kết nối lại</button>
+    <div class="saved" id="saved"></div>
+
+    <p class="hint">
+      Local Server in token ra lúc khởi động, và lưu tại
+      <code>~/.livemcp/token</code>. Không có token thì server từ chối kết nối —
+      đó là chủ ý: bất kỳ trang web nào cũng mở được WebSocket tới
+      <code>127.0.0.1</code>.
+    </p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

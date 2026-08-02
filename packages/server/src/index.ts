@@ -12,6 +12,7 @@ import { LIVEMCP_WS_PORT, type ExtensionToServerMsg } from '@livemcp/protocol';
 import { ExtensionBridge } from './bridge/hub.js';
 import { SessionStore } from './store/sessions.js';
 import { createMcpServer } from './mcp/server.js';
+import { loadOrCreateToken } from './store/token.js';
 import { log } from './log.js';
 
 /** Extension mất kết nối → giữ tool list thêm 30s cho MV3 SW hồi sinh (§6.2). */
@@ -33,6 +34,15 @@ async function main(): Promise<void> {
   }
 
   const store = new SessionStore();
+
+  const { token, created, source } = loadOrCreateToken();
+  if (created) {
+    log.info(`đã sinh token pairing mới, lưu tại ${source}`);
+  }
+  // In ra mỗi lần chạy: người dùng cần dán vào popup extension, và log stdio của
+  // MCP server không phải thứ họ mở ra thường xuyên.
+  log.info(`token pairing: ${token}`);
+  log.info('  → dán token này vào popup extension Live MCP (chỉ cần một lần).');
 
   let graceTimer: NodeJS.Timeout | null = null;
   const bridge = new ExtensionBridge({
@@ -59,7 +69,7 @@ async function main(): Promise<void> {
         store.clear();
       }, DISCONNECT_GRACE_MS);
     },
-  });
+  }, token);
 
   // Extension kết nối lại trong grace period → huỷ lịch xoá phiên.
   store.onChange(() => {
