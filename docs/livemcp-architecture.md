@@ -48,7 +48,7 @@ graph LR
 |---|---|---|
 | **Local Server** | Nói chuyện MCP với agent; dịch declarative → tool; định tuyến lệnh; giữ vòng đời session; chặn hành động `livemcp-confirm` chờ user duyệt | Không đụng DOM, không biết cách click |
 | **Extension SW** | Kết nối WS tới server; thi hành hành động qua CDP; quản lý tab | Không parse schema, không nói MCP |
-| **Content Script** | Quét declarative, observe mutation, tính toạ độ, đọc kết quả/resource, điều khiển con ong | Không tự thi hành click/type thật (việc của CDP) |
+| **Content Script** | Quét declarative, observe mutation, **đưa focus vào phần tử**, tính toạ độ cho hành động chuột, đọc kết quả/resource, điều khiển con ong | Không tự thi hành click/type thật (việc của CDP) |
 | **Trang web** | Khai báo đúng spec, cập nhật `livemcp-state` | Không cần biết Live MCP tồn tại lúc runtime — chỉ là HTML |
 
 ---
@@ -67,9 +67,41 @@ Sự kiện tạo bằng `element.dispatchEvent(new MouseEvent(...))` có `isTru
 - Permission cần trong manifest: `"debugger"`, `"tabs"`, `"scripting"`, host permissions theo site user cho phép.
 - Attach lười: chỉ attach khi có phiên agent hoạt động, detach khi phiên kết thúc (banner biến mất).
 
-### 2.2 Tọa độ là ngôn ngữ chung của hành động
+### 2.2 Bàn phím là đường mặc định; toạ độ là ngôn ngữ của hành động chuột
 
-CDP dispatch theo **tọa độ viewport**, không theo selector. Content script chịu trách nhiệm: tìm element theo `livemcp-name`/`livemcp-arg` → `scrollIntoViewIfNeeded` → `getBoundingClientRect()` → trả tọa độ tâm (hoặc điểm trong `livemcp-region` với canvas) → SW dispatch CDP tại tọa độ đó. Nhờ vậy click canvas và click DOM là **cùng một code path**.
+> **Sửa lại so với draft v1.0.** Bản đầu chốt "toạ độ là ngôn ngữ chung của *mọi* hành động", với lập luận: nhờ vậy click canvas và click DOM dùng chung một code path. Lập luận đó đúng về mặt gọn mã nhưng sai về mặt đúng đắn, và đã trả giá bằng một lỗi tốn nhiều lượt gỡ ở M1 — xem `docs/consult/Q01`, `Q04`.
+
+**Vì sao đổi.** Toạ độ là *sản phẩm của một trạng thái layout*: nó chỉ đúng trong khoảnh khắc đo. Dùng nó làm **danh tính** của phần tử là sai nguyên tắc — bất cứ thứ gì làm dịch layout giữa lúc đo và lúc bấm (ảnh vừa tải, font vừa đổi, `scrollIntoView` của một phép đo khác, sticky header co lại) đều biến toạ độ đúng thành toạ độ sai, và nó **hỏng lặng lẽ**: click trượt không báo lỗi, focus nằm nguyên ở ô cũ, cả chuỗi phím sau đó đổ nhầm vào đó.
+
+Focus thì ngược lại: nó là **trạng thái bền của document**. Đặt xong là giữ nguyên cho tới lượt dispatch, không "cũ đi" theo layout.
+
+**Đường mặc định — bàn phím, không toạ độ:**
+
+| Loại phần tử | Cách tương tác | Cần toạ độ |
+|---|---|---|
+| text / number / email / url / tel / textarea | `focus()` → Ctrl+A → `Input.insertText` | không |
+| date / time / datetime-local | `focus()` → ArrowLeft ×n → gõ chữ số | không |
+| select | `focus()` → Home/End/mũi tên, **không bao giờ mở popup** | không |
+| checkbox / radio | `focus()` đúng nút → Space | không |
+| nút submit | `focus()` → Enter | không |
+| canvas, hover, drag, scroll, phần tử **không** focus được | click chuột tại toạ độ đo ngay trước khi dispatch | **có** |
+
+**Vì sao `el.focus()` không phá vỡ §2.1** (hai điểm đã xác nhận ở Q01):
+
+- `el.focus()` chạy "focusing steps" của HTML spec; sự kiện `focus`/`focusin` sinh ra từ đó **vẫn `isTrusted: true`**. (Khác hẳn `el.click()` — spec bắt buộc dispatch synthetic, nên nó untrusted. Đó là lý do ta không bao giờ dùng `.click()`.) Nghĩa là đường bàn phím **không đưa một sự kiện untrusted nào vào trang**.
+- Sự kiện từ `Input.dispatchKeyEvent` đi qua pipeline input của browser process nên **có cấp transient user activation**. Activation gắn với *hành động* (phím), không phải với bước lấy focus — nên `focus()` không cấp activation cũng không mất gì.
+- Space/Enter trên button/checkbox/radio khiến UA phát một sự kiện `click` **trusted** (`detail: 0`). Widget nghe `click` trên phần tử chuẩn vẫn chạy trọn vẹn qua đường bàn phím.
+
+**INVARIANT — user activation:** `Input.insertText` mô phỏng IME commit, **không** phải keydown, nên tự nó không cấp activation. Mọi chuỗi bước phải chứa ít nhất một phím thật trước bước cần activation. Hôm nay luôn đúng vì đường text-like mở đầu bằng Ctrl+A; đừng bỏ bước đó để "tối ưu".
+
+**INVARIANT — `<select>`:** không bao giờ click vào select, không bao giờ Alt+Down/F4. Popup của select là cửa sổ native có vòng input riêng, nằm ngoài renderer: CDP không đưa phím vào được, kể cả Escape để đóng. Mở nó ra là tự nhốt phiên cho tới khi người dùng thật động tay.
+
+**Nhánh chuột còn lại phải trả đủ ba khoản** (chi tiết ở Q04):
+1. **Đo có kiểm độ ổn định** — đo hai lần cách nhau ~40ms, khác nhau thì đo lại. Cố ý không dùng `requestAnimationFrame` như Playwright: rAF đóng băng khi tab ở nền, đúng trạng thái làm việc bình thường của agent; còn `getBoundingClientRect()` ép tính layout đồng bộ bất kể trạng thái tab.
+2. **`elementFromPoint` tại tâm trước khi bấm** — trượt thì huỷ hành động và nói rõ trúng vào đâu.
+3. **Đối chiếu target của `mousedown` sau khi bấm** — kiểm tại thời điểm *thật*, bịt nốt khoảng trống giữa lúc đo và lúc dispatch.
+
+**Đường nâng cấp đã biết, chưa làm:** dùng `Runtime.callFunctionOn` trong isolated world để lấy `objectId` của phần tử từ registry (không cần selector), rồi `DOM.scrollIntoViewIfNeeded` → `DOM.getContentQuads` → `Input.dispatchMouseEvent` — cả ba cùng kênh `chrome.debugger`, đo và bắn cùng một phía, khe hở co từ ~20ms về ~1–2ms. Đây cũng là lời giải đúng cho iframe (quads trả về theo hệ toạ độ viewport chính, không phải tự cộng offset). Xem §5.3.
 
 ### 2.3 MV3 Service Worker chết sau ~30s idle — phải thiết kế quanh nó
 
@@ -222,7 +254,9 @@ new MutationObserver(muts => scheduleRescan(muts)).observe(document.documentElem
 
 ### 5.3 Iframe cùng origin / khác origin
 
-- Same-origin iframe: content script với `"all_frames": true` chạy trong từng frame, mỗi frame tự quét và báo về SW kèm `frameId`; toạ độ phải cộng offset của iframe trong trang cha khi dispatch CDP (CDP dispatch theo viewport của tab).
+- Same-origin iframe: content script với `"all_frames": true` chạy trong từng frame, mỗi frame tự quét và báo về SW kèm `frameId`. **Không tự cộng offset iframe bằng tay** — phép cộng thủ công chết ở bốn chỗ: gốc document con nằm ở *content box* (phải cộng cả border lẫn padding, không chỉ `rect.left`); iframe lồng nhau đòi cộng đệ quy; iframe có transform/zoom làm CSS px của frame con ≠ CSS px của frame cha (sai *về bản chất*, không phải sai số); và cross-origin thì `frameElement` là null. Lời giải: đo bằng `DOM.getContentQuads` từ session top-level — quads trả về theo hệ toạ độ viewport chính, đúng thứ `Input.dispatchMouseEvent` cần. Xem §2.2 "đường nâng cấp".
+- Shadow DOM **không** tạo hệ toạ độ mới: `getBoundingClientRect()`/quads đã ở toạ độ viewport của frame, không phải cộng gì. Chỗ duy nhất shadow DOM khác biệt là `activeElement` và `elementFromPoint` — phải hỏi `getRootNode()` chứ không phải `document`.
+- OOPIF (cross-origin khác process) cần attach session riêng cho frame (`Target.setAutoAttach` flatten). Hành vi từng đổi giữa các bản Chrome → làm sau, và chỉ làm khi đã có ca E2E riêng cho nó.
 - Cross-origin iframe: mỗi frame vẫn có content script riêng (nếu host permission cho phép) — hoạt động bình thường vì mọi giao tiếp đi qua SW chứ không qua trang cha. Nếu không có permission → vùng đó ngoài scope, ghi rõ trong tài liệu user.
 
 ### 5.4 Đọc kết quả & resource

@@ -18,6 +18,18 @@ export const KEEPALIVE_INTERVAL_MS = 20_000;
 /** Timeout đợi mặc định khi phần tử không khai báo livemcp-wait-timeout (spec §3.1). */
 export const DEFAULT_WAIT_TIMEOUT_MS = 5_000;
 
+/**
+ * Thời gian cộng thêm vào `waitTimeout` để extension kịp làm phần việc của nó
+ * ngoài khâu đợi: lập kế hoạch, gắn debugger, và phát từng sự kiện chuột/phím.
+ *
+ * Không phải con số cho có. Một form 6 ô sinh ~60 sự kiện input, mỗi sự kiện là
+ * một vòng CDP; trên tab bị che khuất renderer bị giáng ưu tiên nên mỗi vòng có
+ * thể mất ~180ms — tức riêng khâu gõ đã hơn 10 giây. Server và extension phải
+ * dùng CHUNG hằng số này, nếu không bên nào bỏ cuộc trước sẽ nuốt mất lời báo
+ * lỗi của bên kia.
+ */
+export const ACTION_SLACK_MS = 20_000;
+
 /** Trần độ dài text đọc từ trang, tránh phá context window của agent (§5.4). */
 export const MAX_RESULT_CHARS = 4_000;
 
@@ -200,6 +212,11 @@ export interface ExecuteActionMsg {
   args: Record<string, unknown>;
   /** Với tool kind='form': map field → value. */
   formFill: Record<string, unknown> | null;
+  /**
+   * Ngân sách đợi (ms) mà server dành cho hành động này. Extension phải tự bỏ
+   * cuộc trước khi server hết kiên nhẫn, để lời báo lỗi còn kịp về tới agent.
+   */
+  waitTimeoutMs: number;
 }
 
 /** Đọc resource `read_*`. */

@@ -37,6 +37,44 @@ for (const el of form.elements) {
   });
 }
 
+// Máy ghi sự kiện — lưới bảo vệ cho đặt cược trung tâm của cả dự án.
+//
+// `isTrusted` là thuộc tính readonly do trình duyệt gán, trang không giả mạo
+// được, nên listener ở capture phase đọc ra giá trị thật. Khẳng định đáng giá
+// nhất ở đây là khẳng định ÂM: sau khi agent điền xong, KHÔNG được tồn tại một
+// sự kiện tương tác nào có isTrusted === false. Nó sẽ bắt được cái ngày ai đó
+// lỡ thêm một `dispatchEvent` "chỉ lần này thôi" — đúng loại xói mòn triết lý
+// mà không review bằng mắt nào thấy.
+const recorder = (window.__livemcpEvents = []);
+for (const type of ['focusin', 'keydown', 'click', 'input', 'change', 'submit']) {
+  document.addEventListener(
+    type,
+    (e) => {
+      const target = e.composedPath()[0];
+      recorder.push({
+        type,
+        isTrusted: e.isTrusted,
+        target: target?.name || target?.id || target?.tagName?.toLowerCase() || '?',
+      });
+      if (!e.isTrusted) note(`⚠ ${type} KHÔNG trusted trên ${recorder.at(-1).target}`);
+    },
+    { capture: true },
+  );
+}
+
+// `focusin` đáng chú ý riêng: Live MCP đưa con trỏ bằng `el.focus()` thay vì
+// click theo toạ độ. Nếu dòng này in ra `isTrusted: true` thì `focus()` chạy
+// focusing steps của spec chứ không dispatch synthetic — nghĩa là đường bàn
+// phím không hề đưa sự kiện untrusted nào vào trang.
+document.addEventListener(
+  'focusin',
+  (e) => {
+    const t = e.composedPath()[0];
+    note(`focus → ${t?.name || t?.tagName?.toLowerCase() || '?'}  (isTrusted: ${e.isTrusted})`);
+  },
+  { capture: true, once: true },
+);
+
 let counter = 1022;
 
 form.addEventListener('submit', (e) => {

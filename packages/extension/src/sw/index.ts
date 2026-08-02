@@ -1,4 +1,9 @@
-import type { ActionResultMsg, ServerToExtensionMsg } from '@livemcp/protocol';
+import {
+  ACTION_SLACK_MS,
+  DEFAULT_WAIT_TIMEOUT_MS,
+  type ActionResultMsg,
+  type ServerToExtensionMsg,
+} from '@livemcp/protocol';
 import type {
   ActionStep,
   AfterActionReply,
@@ -92,7 +97,7 @@ function handleServerMessage(msg: ServerToExtensionMsg): void {
       link.send({ type: 'pong' });
       break;
     case 'execute_action':
-      void executeAction(msg.tabId, msg.actionId, msg.tool, msg.args);
+      void executeAction(msg.tabId, msg.actionId, msg.tool, msg.args, msg.waitTimeoutMs);
       break;
     case 'read_resource':
       // TODO(M3): đọc resource qua content script.
@@ -111,13 +116,59 @@ function handleServerMessage(msg: ServerToExtensionMsg): void {
 const STEP_GAP_MS = 30;
 
 /**
- * Số vòng tối đa: 1 vòng dò thứ tự ô ngày + 1 vòng thao tác thật + tối đa 3
- * vòng gõ lại theo thứ tự segment khác, cộng biên an toàn.
+ * Số vòng tối đa. Mỗi ô của form là một vòng riêng (content script đo toạ độ
+ * ngay trước khi dùng, không đo cả mẻ), cộng 1 vòng dò thứ tự ô ngày, 1 vòng
+ * bấm submit, và tối đa 3 vòng gõ lại ngày theo thứ tự segment khác.
  */
-const MAX_ROUNDS = 6;
+const MAX_ROUNDS = 20;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Server bỏ cuộc sau `waitTimeout + 5000ms`. SW phải bỏ cuộc SỚM HƠN thế, nếu
+ * không agent chỉ nhận được "extension không phản hồi" — một câu chẳng nói lên
+ * điều gì. Chừa lại khoảng này để lời báo lỗi kịp về tới nơi.
+ */
+const SW_DEADLINE_MARGIN_MS = 1_500;
+
+/**
+ * Chạy một giai đoạn với hạn chót chung. Hết hạn thì nói rõ **giai đoạn nào**
+ * treo — im lặng là kiểu hỏng khó chữa nhất của một chuỗi 5 lớp.
+ */
+async function withDeadline<T>(
+  phase: string,
+  work: Promise<T>,
+  deadline: number,
+  timings: string[],
+): Promise<T> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) {
+    throw new Error(
+      `Hết thời gian trước khi kịp vào giai đoạn "${phase}". Đã qua: ${timings.join(', ')}.`,
+    );
+  }
+  const startedAt = Date.now();
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `Treo ở giai đoạn "${phase}": quá ${remaining}ms chưa xong. ` +
+                  `Đã qua: ${timings.join(', ')}.`,
+              ),
+            ),
+          remaining,
+        ),
+      ),
+    ]);
+  } finally {
+    timings.push(`${phase} ${Date.now() - startedAt}ms`);
+  }
 }
 
 /** Thi hành một plan do content script soạn. SW không biết plan này nghĩa là gì. */
@@ -158,6 +209,7 @@ async function executeAction(
   actionId: string,
   tool: string,
   args: Record<string, unknown>,
+  waitTimeoutMs: number,
 ): Promise<void> {
   const started = Date.now();
   const reply = (result: Omit<ActionResultMsg, 'type' | 'tabId' | 'actionId'>) =>
@@ -175,7 +227,17 @@ async function executeAction(
       return;
     }
 
-    const plan = await sendToTab<PlanReply>(tabId, { type: 'sw_plan_action', tool, args });
+    // `?? DEFAULT` để còn chạy được với server bản cũ chưa gửi trường này.
+    const budget = waitTimeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS;
+    const deadline = started + budget + ACTION_SLACK_MS - SW_DEADLINE_MARGIN_MS;
+    const timings: string[] = [];
+
+    const plan = await withDeadline(
+      'lập kế hoạch (content script)',
+      sendToTab<PlanReply>(tabId, { type: 'sw_plan_action', tool, args }),
+      deadline,
+      timings,
+    );
     if (!plan.ok || !plan.steps) {
       reply({ status: 'error', error: plan.error ?? 'Không lập được kế hoạch thao tác.' });
       return;
@@ -183,14 +245,25 @@ async function executeAction(
 
     // TODO(M5): bảo content script cho ong bay tới từng toạ độ trước mỗi bước.
 
-    await ensureAttached(tabId);
+    await withDeadline('gắn debugger (CDP)', ensureAttached(tabId), deadline, timings);
 
     let steps = plan.steps;
     for (let round = 0; round < MAX_ROUNDS; round += 1) {
-      await runSteps(tabId, steps);
+      await withDeadline(
+        `thi hành ${steps.length} bước qua CDP`,
+        runSteps(tabId, steps),
+        deadline,
+        timings,
+      );
 
-      const after = await sendToTab<AfterActionReply>(tabId, { type: 'sw_after_action', tool });
+      const after = await withDeadline(
+        'đọc kết quả (content script)',
+        sendToTab<AfterActionReply>(tabId, { type: 'sw_after_action', tool }),
+        deadline,
+        timings,
+      );
       if (after.status !== 'retry') {
+        console.info(`[Live MCP] ${tool}: ${timings.join(' · ')}`);
         reply({
           status: after.status,
           resultText: after.resultText,

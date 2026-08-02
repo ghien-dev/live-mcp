@@ -476,12 +476,40 @@ App cập nhật khối JSON theo nhịp hợp lý (vd mỗi 200ms hoặc mỗi 
 
 ---
 
+## 9.5 Hai yêu cầu conformance về hành vi
+
+Ngoài các thuộc tính phải khai báo, trang đạt chuẩn còn phải thoả hai điều kiện về **hành vi**. Cả hai đều không thêm attribute nào — chúng chỉ phát biểu lại những gì HTML đã có, nên không có gì để dev điền sai.
+
+### 9.5.1 Phần tử tương tác phải vận hành được thuần bàn phím
+
+> Mọi phần tử khai báo cho agent **PHẢI** focus được theo chuẩn HTML (form control, `<button>`, `<a href>`, hoặc `tabindex` hợp lệ) và vận hành được hoàn toàn bằng bàn phím.
+
+Nói cách khác: **agent-accessible ≡ keyboard-accessible.** Chuẩn cố ý *không* phát minh khái niệm "agent-focusable" của riêng mình — dựa hẳn vào focusability chuẩn HTML cho ba cái lợi: không có gì để khai sai, máy kiểm được tự động, và nó ép trang tử tế với bàn phím. Nhờ vậy chuẩn thừa kế miễn phí hai mươi năm hạ tầng WCAG/ARIA APG: mọi trang keyboard-accessible nghiễm nhiên agent-accessible.
+
+Hệ quả thực dụng: **dùng `<button>` thật, đừng dùng `<div onclick>`.** Extension đi đường bàn phím (Enter/Space) với phần tử focus được — và Space/Enter trên button chuẩn khiến trình duyệt phát một sự kiện `click` thật, nên mọi handler `click` của bạn vẫn chạy bình thường. Với `<div onclick>` thì extension buộc phải quay về click theo toạ độ, kém tin cậy hơn hẳn.
+
+Cũng vì lý do này, chuẩn **không** khuyên thay `<select>` native bằng listbox ARIA tự chế: listbox tự chế trung bình tệ hơn select native về a11y, về mobile, *và cho chính agent* — hành vi bàn phím của nó là code tự viết, không có gì bảo đảm.
+
+### 9.5.2 `change`/`input` là tạm thời; hiệu lực chỉ ở hành động commit tường minh
+
+> Trang **PHẢI** coi `change`/`input` của một control là *thay đổi tạm thời*. Mọi tác dụng thật (gọi API, tạo đơn, trừ tiền) chỉ được xảy ra ở một **hành động commit tường minh** — submit form, bấm nút.
+
+Lý do: extension điều khiển `<select>` bằng mũi tên đúng như một người dùng bàn phím, nên đi từ option 1 tới option 8 sẽ phát bảy sự kiện `change`. Đây **chính xác** là chuỗi sự kiện một người dùng bàn phím thật tạo ra — trang nào bắn API không debounce theo từng `change` của select thì đã hỏng với người dùng bàn phím từ trước khi agent tồn tại.
+
+Yêu cầu này thay cho một attribute kiểu `livemcp-commit-key`: nhu cầu thật đằng sau nó ("khi nào thay đổi có hiệu lực") đã có sẵn ngữ nghĩa HTML chuẩn — form + nút submit.
+
+*(Lọc/preview theo `change` thì vẫn tốt và được khuyến khích — điều bị cấm là **tác dụng không đảo ngược** gắn vào `change`.)*
+
+---
+
 ## 10. Checklist tuân thủ chuẩn cho developer
 
 Trang của bạn đạt chuẩn Live MCP Declarative khi:
 
 - [ ] Có đủ 3 meta cấp trang (`livemcp`, `livemcp-app`, `livemcp-description`).
 - [ ] Mọi phần tử tương tác dành cho user đều có `livemcp-name` + `livemcp-description` + `livemcp-action` (hoặc nằm trong form có `toolname`).
+- [ ] **Mọi phần tử khai báo đều focus được và vận hành được thuần bàn phím** (§9.5.1) — thử ngay: rút chuột ra, dùng Tab + Enter/Space/mũi tên làm hết workflow.
+- [ ] **Không hành động không đảo ngược nào gắn vào `change`/`input`** (§9.5.2) — chỉ ở submit hoặc nút bấm.
 - [ ] Mọi hành động bất đồng bộ có `livemcp-wait`/`livemcp-wait-gone` **và** vùng đích có `livemcp-state` được app cập nhật đúng.
 - [ ] Mọi DOM sinh động được render **kèm sẵn** declarative attributes ngay khi gắn vào cây.
 - [ ] Danh sách lặp dùng tool tham số hóa (`livemcp-arg`), không sinh name trùng logic.

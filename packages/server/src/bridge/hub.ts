@@ -1,5 +1,6 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  ACTION_SLACK_MS,
   KEEPALIVE_INTERVAL_MS,
   LIVEMCP_WS_HOST,
   LIVEMCP_WS_PORT,
@@ -17,8 +18,6 @@ export interface BridgeHandlers {
   onAllDisconnected(): void;
 }
 
-/** Slack cộng thêm vào timeout của content script trước khi server tự bỏ cuộc. */
-const ACTION_TIMEOUT_SLACK_MS = 5_000;
 
 /**
  * WebSocket hub nói chuyện với Chrome Extension (docs/livemcp-architecture.md §3).
@@ -174,8 +173,9 @@ export class ExtensionBridge {
         tool,
         args,
         formFill,
+        waitTimeoutMs,
       }),
-      waitTimeoutMs + ACTION_TIMEOUT_SLACK_MS,
+      waitTimeoutMs + ACTION_SLACK_MS,
     );
   }
 

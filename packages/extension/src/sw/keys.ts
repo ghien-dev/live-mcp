@@ -25,7 +25,17 @@ const MODIFIER_BITS: Record<string, number> = {
   shift: 8,
 };
 
-const NAMED: Record<string, { code: string; keyCode: number; text?: string }> = {
+/**
+ * `key` chỉ khai khi **khác** tên tra cứu.
+ *
+ * Với hầu hết phím thì tên spec trùng đúng giá trị `KeyboardEvent.key` của DOM
+ * ('Enter', 'ArrowLeft', 'PageUp'…), nên để trống là đúng. Ngoại lệ duy nhất là
+ * phím cách: spec viết `Space` (đó là `code`), còn `key` của DOM là một dấu
+ * cách ' '. Gửi `key: 'Space'` thì trình duyệt **không** coi đó là phím cách —
+ * checkbox/radio/button không toggle, và hỏng hoàn toàn im lặng vì sự kiện vẫn
+ * được gửi đi, vẫn trusted, chỉ là không kích hoạt gì cả.
+ */
+const NAMED: Record<string, { key?: string; code: string; keyCode: number; text?: string }> = {
   Enter: { code: 'Enter', keyCode: 13, text: '\r' },
   Tab: { code: 'Tab', keyCode: 9 },
   Escape: { code: 'Escape', keyCode: 27 },
@@ -39,8 +49,8 @@ const NAMED: Record<string, { code: string; keyCode: number; text?: string }> = 
   End: { code: 'End', keyCode: 35 },
   PageUp: { code: 'PageUp', keyCode: 33 },
   PageDown: { code: 'PageDown', keyCode: 34 },
-  Space: { code: 'Space', keyCode: 32, text: ' ' },
-  ' ': { code: 'Space', keyCode: 32, text: ' ' },
+  Space: { key: ' ', code: 'Space', keyCode: 32, text: ' ' },
+  ' ': { key: ' ', code: 'Space', keyCode: 32, text: ' ' },
 };
 
 /**
@@ -58,7 +68,13 @@ export function parseKey(spec: string): KeyDef {
 
   const named = NAMED[rawKey] ?? NAMED[rawKey.charAt(0).toUpperCase() + rawKey.slice(1)];
   if (named) {
-    return { key: rawKey, code: named.code, keyCode: named.keyCode, text: named.text, modifiers };
+    return {
+      key: named.key ?? rawKey,
+      code: named.code,
+      keyCode: named.keyCode,
+      text: named.text,
+      modifiers,
+    };
   }
 
   if (/^\d$/.test(rawKey)) {

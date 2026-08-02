@@ -24,14 +24,36 @@ export async function ensureAttached(tabId: number): Promise<void> {
   try {
     await chrome.debugger.attach({ tabId }, '1.3');
     attached.add(tabId);
+    await unthrottle(tabId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes('already attached')) {
       attached.add(tabId);
+      await unthrottle(tabId);
       return;
     }
     throw err;
   }
+}
+
+/**
+ * Gỡ bóp ga cho tab không hiển thị.
+ *
+ * Khi cửa sổ bị che khuất hoàn toàn hoặc tab ở nền, Chrome giáng ưu tiên
+ * renderer: `requestAnimationFrame` ngừng hẳn, timer bị kẹp về 1s (sau 5 phút
+ * là 1 phút), và mỗi sự kiện input qua CDP phải chờ rất lâu mới được xác nhận —
+ * đo thực tế ~180ms/lệnh, khiến một form 60 sự kiện mất hơn 12 giây.
+ *
+ * Nhưng đó lại là trạng thái BÌNH THƯỜNG của Live MCP: agent làm việc trong khi
+ * người dùng đang nhìn chỗ khác. Bảo renderer coi như trang đang được focus —
+ * đúng cách Playwright/Puppeteer làm để tự động hoá chạy ổn định trên tab nền.
+ * Đây là gỡ bóp ga, KHÔNG phải giả lập input: sự kiện vẫn do CDP sinh và vẫn
+ * `isTrusted: true`.
+ */
+async function unthrottle(tabId: number): Promise<void> {
+  // Trang chưa chắc hỗ trợ hết; lỗi ở đây không được làm hỏng cả hành động.
+  await send(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
+  await send(tabId, 'Page.setWebLifecycleState', { state: 'active' }).catch(() => {});
 }
 
 export async function detach(tabId: number): Promise<void> {
