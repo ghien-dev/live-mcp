@@ -281,6 +281,7 @@ Không thuộc milestone nào; ghi ra để không rơi.
 | Chọn phần tử theo `livemcp-arg` | `TODO(M3)` trong `content/index.ts` | M3 |
 | Ranh giới "ngoài phạm vi v1" chưa khai trong spec: contenteditable/rich-text (IME, định dạng), drag-and-drop thật, slider tuỳ chế | [R07] câu 2 | **khai ngay ở M1.5** — ranh giới khai ra là *quyết định*, không khai là *lỗ hổng chờ người dùng phát hiện* (N2) |
 | Kiến trúc §5.5 còn ghi "SW chờ ong tới nơi rồi mới dispatch" | [R04] câu 3 | sửa khi đến M5, ghi rõ là đảo ngược có chủ đích |
+| Giá trị option của `select`/`radio` **chưa qua** `toAgentText()` | M1.5, `parser/schema.ts` | M4. Đây là giá trị định danh phải khớp chính xác với trang **và** với `validateArgs`, nên làm sạch một phía sẽ khiến agent gửi giá trị đã sửa rồi bị chính ta từ chối. Chỗ đúng để chuẩn hoá là content script, tức phải sửa cả hai đầu cùng lúc. |
 
 ---
 
