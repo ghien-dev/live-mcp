@@ -5,12 +5,16 @@ bằng chuột và bàn phím thật (trusted events qua CDP), không gọi Java
 
 - Đặc tả cho web developer: [`docs/livemcp-declarative-spec.md`](docs/livemcp-declarative-spec.md)
 - Kiến trúc hệ thống: [`docs/livemcp-architecture.md`](docs/livemcp-architecture.md)
+- **Lộ trình phát triển**: [`docs/livemcp-roadmap.md`](docs/livemcp-roadmap.md)
+- Hỏi–đáp kỹ thuật với chuyên gia: [`docs/consult/`](docs/consult/INDEX.md)
 
 ## Trạng thái
 
-**M0 — walking skeleton.** Toàn tuyến `agent → MCP → server → WebSocket → extension → CDP → DOM`
-đã thông với một tool `click` duy nhất. Các milestone tiếp theo (form/type, cơ chế đợi,
-tool tham số hoá, policy, con ong 🐝, canvas) xem mục "Lộ trình" trong kế hoạch dự án.
+**M0 ✅ · M1 ✅** — toàn tuyến `agent → MCP → server → WebSocket → extension → CDP → DOM`
+đã thông; form điền được đủ loại ô bằng bàn phím thật, mọi sự kiện `isTrusted: true`.
+Có lưới E2E chạy trên Chrome thật (23 bài, ba locale).
+
+Milestone tiếp theo và thứ tự ưu tiên: [`docs/livemcp-roadmap.md`](docs/livemcp-roadmap.md).
 
 | Package | Vai trò |
 |---|---|
