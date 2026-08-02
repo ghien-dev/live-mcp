@@ -7,10 +7,10 @@
 
 | | |
 |---|---|
-| Phiên bản | 1.0 (đề xuất, **chờ duyệt**) |
+| Phiên bản | 1.1 — **đã duyệt**, sửa theo R01–R07 |
 | Cập nhật | 2026-08-02 |
-| Người đề xuất | Claude |
-| Trạng thái | ⏳ chờ chuyên gia duyệt |
+| Người đề xuất | Claude · duyệt: Fable |
+| Trạng thái | 🔧 đang thi hành (M1.5) |
 | Tài liệu nền | [`project-ideal.md`](project-ideal.md) · [`livemcp-architecture.md`](livemcp-architecture.md) §8 · [`livemcp-declarative-spec.md`](livemcp-declarative-spec.md) |
 
 ---
@@ -45,23 +45,52 @@ Phép thử cho mọi attribute ứng viên: *"dev có thể điền SAI mà tra
 **N4 · Chuẩn sống nhờ vòng phần thưởng, không nhờ chất lượng văn bản.**
 Nguyên nhân tử vong số một của chuẩn declarative là *không có phần thưởng tức thì cho người khai*. Đối chứng: microformats/RDFa chết ↔ schema.org sống, khác đúng một chỗ — schema.org đổi được rich snippet trong tuần. Nguyên tắc này là lý do mục 3 dưới đây **đổi thứ tự** so với §8 của kiến trúc.
 
+**N5 · Đối thủ không phải Imperative API, mà là "không cần chuẩn nào cả".** *(từ [R07])*
+Agent thị giác không đòi trang hợp tác. Nếu ta vượt được khe hai-phía (trang chưa khai → agent vô giá trị; agent chưa có → khai báo vô giá trị) đúng lúc vision đã "đủ tốt, đủ rẻ", câu dev sẽ hỏi là *"sao tôi phải khai attribute?"*. Không đua độ phủ với vision — đứng ở chỗ vision không đứng được: **tất định · rẻ và nhanh · kiểm toán được**. Mọi lựa chọn tính năng và mọi câu quảng bá phải quy về được một trong ba chữ đó.
+
+**N6 · Agent không có mắt — đó là tiền đề, không phải hệ quả.** *(từ [R07])*
+Luận điểm nền *"người làm được không cần JS thì agent cũng làm được"* bỏ sót một thứ người mang theo mà agent không có: **kênh hồi phục bằng mắt**. Người điền sai thì nhìn thấy và tự sửa. Vì vậy phát biểu đúng phải là điều kiện: *mọi tín hiệu người dùng cần thấy để ra quyết định phải tồn tại dưới dạng text hoặc attribute*. Trang báo lỗi chỉ bằng màu viền, báo trạng thái chỉ bằng icon — đó là điểm mù đúng nghĩa, không phải ca hiếm.
+
 ---
 
 ## 3. Lộ trình đề xuất
 
 ### 3.1 Tổng quan và chỗ khác với kiến trúc §8
 
-| | Kiến trúc §8 (gốc) | Đề xuất | Lý do đổi |
+| | Kiến trúc §8 (gốc) | Sau khi duyệt | Lý do đổi |
 |---|---|---|---|
-| M2 | Đợi + DOM động | Đợi + DOM động **+ shadow DOM** | cùng đụng scanner & observer; tách ra phải sửa hai lần |
+| — | *(không có)* | **M1.5 — Vệ sinh bảo mật** ⬅ *mới, đang làm* | [R02]: lỗ đang mở **hôm nay**, không phải rủi ro tương lai |
+| M2 | Đợi + DOM động | Đợi + DOM động, shadow DOM là **hạng mục cuối có quyền rơi** | [R01]: gộp *code* nhưng không gộp *cam kết* |
+| — | *(không có)* | **M2.5 — Chạm thực địa** ⬅ *mới* | [R06]/[R07]: demo-site không bao giờ phản bác mình |
 | M3 | Tool tham số hoá + resource | *(giữ nguyên)* | |
-| — | *(không có)* | **M3.5 — Validator & DX** ⬅ *mới* | N4: vòng phần thưởng là thứ quyết định chuẩn sống hay chết |
-| M4 | Policy layer | Policy layer, **tách phần bắt buộc lên sớm** | hôm nay WS chưa có token — xem [R02] |
-| M5 | Bee cursor | Bee cursor | |
+| — | *(không có)* | **M3.5 — Validator & DX** ⬅ *mới* | N4: vòng phần thưởng quyết định chuẩn sống hay chết |
+| M4 | Policy layer | Policy layer, **đã trừ phần đưa lên M1.5** | phần còn lại bảo vệ *người dùng tương lai* — chưa gấp |
+| M5 | Bee cursor | Bee cursor, **không nằm trên đường thi hành** | [R04]: đảo ngược kiến trúc §5.5 có chủ đích |
 | M6 | Canvas + MPA + iframe | Canvas + MPA + iframe | |
 | M7 | Đóng gói | Đóng gói + Streamable HTTP | |
 
+Hai thay đổi tôi đề xuất mà **chuyên gia bác lại một phần**, ghi ra để không quên: kéo cả M4 lên sớm (chỉ token + `toAgentText()` được kéo — phần còn lại bảo vệ người chưa tồn tại) và gộp shadow DOM vào M2 như hạng mục ngang hàng (thành hạng mục có quyền rơi).
+
 Kích thước ghi theo **S / M / L** thay vì ngày. Lý do: bốn ngày qua cho thấy ước lượng theo ngày ở dự án này sai rất xa — riêng M1 tốn nhiều lượt gỡ hơn cả M0, và phần đắt nhất là *chẩn đoán*, thứ không ước lượng được. S/M/L nói được thứ tự ưu tiên mà không giả vờ chính xác.
+
+---
+
+### M1.5 — Vệ sinh bảo mật · **S** · ưu tiên 0 · [R02] [R05]
+
+> Không phải "đầu tư bảo mật". Là khoá cửa trước khi đi ngủ — hai việc rẻ đóng đúng
+> những lỗ **đang mở hôm nay**, không phải lỗ giả định.
+
+**Mô hình đe doạ đã bị sửa.** Lộ trình v1.0 viết *"bất kỳ tiến trình local nào cũng nối được vào hub"*. Sai ở chỗ nhẹ tay: **bất kỳ trang web nào đang mở trong bất kỳ trình duyệt nào** cũng mở được WebSocket tới `127.0.0.1` — handshake WS không bị CORS chặn. Nghĩa là ranh giới "chưa demo cho ai" đã bị vượt qua **từ ngày đầu**: mỗi lần lướt web trong lúc server chạy, mọi trang ghé qua đều có cơ hội bắt tay với hub và điều khiển trình duyệt của chính chủ dự án. Đây là kịch bản drive-by thật, hôm nay.
+
+**Việc cụ thể**
+
+1. **Token pairing** — server sinh token lần chạy đầu, lưu vào file cấu hình người dùng; extension gửi kèm lúc handshake; sai token thì đóng socket ngay.
+2. **Chặn origin trình duyệt** — WS đến từ một trang web luôn mang header `Origin: http(s)://…`, còn từ service worker của extension thì không. Trang web **không giả mạo được** header này, nên đây là bộ lọc rẻ và chặt hơn cả token cho đúng lớp tấn công trên. Làm cả hai: token là *xác thực*, origin là *chặn lớp*.
+3. **`toAgentText()` — một cửa duy nhất** cho mọi chuỗi từ web đi tới agent. Hôm nay chỉ cần: cắt trần độ dài, vô hiệu hoá code-fence/delimiter để text trang không phá được khung bao nó, gắn nhãn nguồn. Giá trị nằm ở chỗ **có đúng một cửa** — M4 làm giàu bộ lọc sau mà không phải truy lại từng đường text. Đây là lý do phần này không đợi được M4: càng lùi thì số đường text phải bọc càng nhiều.
+4. **Hợp đồng tương thích phía consumer** *([R05] câu 3)* — phải có **trước khi** tồn tại bất kỳ "trang cũ" nào, tức là bây giờ: gặp attribute `livemcp-*` lạ → bỏ qua, không bao giờ fail; gặp **major** spec lạ → nói rõ "trang khai spec vN, extension này hiểu vM" thay vì im lặng (N2).
+5. **Hạ nhãn spec xuống draft** — `1.0` là lời hứa ổn định mà dự án chưa muốn giữ (bằng chứng: §9.5 vừa thêm tuần này). Meta tag chỉ khai **major**.
+
+**Nghiệm thu** — Một trang web mở WS tới hub bị từ chối (cả khi đoán đúng cổng). Không có token → không nối được. Mọi text từ trang tới agent đi qua đúng một hàm, có test chứng minh text độc không phá được khung bao.
 
 ---
 
@@ -75,18 +104,38 @@ Chủ dự án viết trong [`project-ideal.md`](project-ideal.md): *"DOM mới 
 
 1. `MutationObserver` trong content script, lọc đúng theo declarative và debounce (kiến trúc §5.2) → `declarative_delta`.
 2. Server phát `notifications/tools/list_changed` khi tool list đổi; xử lý `seq` chống race giữa delta và snapshot mới sau navigation (§6.2).
-3. Waiter thật theo thứ tự ưu tiên spec §7.2: `livemcp-state` → `livemcp-wait`/`wait-gone` → DOM lắng → timeout. Thay bản tối giản hiện tại.
+3. Waiter thật theo spec §7.2: `livemcp-state` → `livemcp-wait`/`wait-gone` → DOM lắng → timeout. Thay bản tối giản hiện tại. **Ràng buộc mới từ [R07] câu 2:** `livemcp-state` trượt phép thử N3 (dev quên cập nhật, trang vẫn chạy bình thường) nên waiter phải coi state là **tối ưu hoá**, còn **DOM lắng là đường tin cậy** — không bao giờ để state-rot treo agent vĩnh viễn.
 4. Tool hệ thống `livemcp_wait(site, selector?, timeoutMs)` — cho agent chủ động đợi (§6.4).
-5. **Shadow DOM** *(gộp vào đây, xem [R01])*: scanner đệ quy vào `shadowRoot`; observer phải gắn cho **từng** shadow root — observer của `document` không thấy thay đổi bên trong shadow tree.
-6. Trang demo: dropdown động (mẫu spec §5.2) + một form dựng bằng web component.
+5. Trang demo: dropdown động (mẫu spec §5.2).
+6. **Shadow DOM** — *hạng mục cuối, có quyền rơi* (xem [R01] và phần nghiệm thu). Scanner đệ quy vào `shadowRoot`; observer gắn cho **từng** shadow root. Bốn cạm bẫy đã biết trước:
+   - **Không có sự kiện nào báo `attachShadow`** — node có thể vào DOM trước rồi mới gắn shadow root. Ứng phó: mỗi lần xử lý node trong delta thì kiểm lại `el.shadowRoot`, chấp nhận trễ một nhịp mutation. **Không** monkey-patch `Element.prototype.attachShadow` — đường đó tiêm code vào trang, phá chính ranh giới content script.
+   - **Map host → observer là chỗ rò rỉ bộ nhớ kinh điển** — disconnect khi host rời DOM, và kiểm bằng `isConnected` trong nhịp rescan chứ đừng tin removal event luôn đến đủ.
+   - **Hiệu năng**: `el.shadowRoot` không query được bằng selector nên phải đi qua từng element. Chỉ đi sâu ở lần quét đầu và trên subtree các node vừa thêm; tuyệt đối không walk cả trang mỗi mutation.
+   - **Phần tử *slotted* nằm ở light DOM** — `querySelectorAll` trên document đã thấy nó rồi; đệ quy thêm qua `assignedElements` sẽ đếm trùng.
 
-**Nghiệm thu**
+**Nghiệm thu — hai bậc** *(theo [R01])*
 
-- Agent gọi tool mở dropdown → đợi → **nhận được tool mới** sinh từ DOM mới → gọi tiếp → hoàn tất, không cần biết trước gì về dropdown đó.
-- E2E: form trong shadow DOM (gỡ `fixme` ở `packages/e2e/tests/05-gaps.spec.ts`).
-- E2E: tool xuất hiện/biến mất đúng theo DOM, không phụ thuộc `sleep`.
+- **Bậc 1, bắt buộc** *(chính là luận điểm trung tâm)*: agent gọi tool mở dropdown → đợi → **nhận được tool mới** sinh từ DOM mới → gọi tiếp → hoàn tất, không cần biết trước gì về dropdown đó. E2E: tool xuất hiện/biến mất đúng theo DOM, không phụ thuộc `sleep`.
+- **Bậc 2, cố gắng**: form trong shadow DOM chạy được (gỡ `fixme` ở `packages/e2e/tests/05-gaps.spec.ts`) + demo form dựng bằng web component. **Nếu M2 kéo dài thì bậc 2 rơi xuống làm cùng M3** — đã thoả thuận trước nên không ai phải áy náy, và không milestone mới nào phải sinh ra.
 
 **Rủi ro** — Observer bắn quá nhiều (trang React re-render liên tục) → bão `list_changed` làm ngộp agent. Ứng phó: debounce + so sánh nội dung, chỉ báo khi *tool list* đổi thật chứ không phải DOM đổi. Đây cũng là chỗ N2 cần được thiết kế vào từ đầu: delta sai thì hỏng im lặng.
+
+---
+
+### M2.5 — Chạm thực địa · **S** · ⬅ **mới** · [R06] [R07]
+
+> Khi được hỏi *"nếu chỉ được đổi một điều trong lộ trình"*, chuyên gia chọn đúng
+> mục này. Đó là lý do nó nằm ngay sau M2 chứ không nằm trong phần "sau này".
+
+**Vì sao ở đây, không muộn hơn.** Demo-site không bao giờ phản bác mình — nó do chính mình thiết kế để chuẩn chạy đẹp. Trang của người khác thì có. Nguy cơ overfit compound theo tuần, nên gặp càng sớm thì mỗi lần bị phản bác càng rẻ. Nó cũng là thuốc cho đúng loại rủi ro đã cắn ở M1: quyết định nghe thuyết phục, sống sót chỉ vì chưa gặp thứ gì đủ lạ để phản bác.
+
+**Việc cụ thể**
+
+1. Lấy một app mã nguồn mở có **form thật** (booking / todo / admin), tự khai báo nó **trong vai bên thứ ba**.
+2. **Luật chơi:** chỉ được sửa template của app, **không được sửa spec cho vừa tay**. Mỗi lần muốn "nới spec một tí cho xong" chính là chỗ dev thật sẽ bỏ cuộc → ghi thành backlog, không sửa ngay.
+3. Trang này sau đó dùng lại ba lần: bộ E2E thứ hai, ví dụ trong tài liệu M3.5, và điểm đo cho chỉ số ③ ở mục 3.3.
+
+**Nghiệm thu** — Agent hoàn thành một tác vụ đầu-cuối trên app không do mình thiết kế. Danh sách "chỗ muốn nới spec" được ghi lại đầy đủ — danh sách này *chính là* kết quả có giá trị nhất của milestone, không phải cái form chạy được.
 
 ---
 
@@ -102,40 +151,47 @@ Chủ dự án viết trong [`project-ideal.md`](project-ideal.md): *"DOM mới 
 
 ---
 
-### M3.5 — Validator & vòng phần thưởng cho dev · **M** · ⬅ **mới, đề xuất chèn** · [R03]
+### M3.5 — Validator & vòng phần thưởng cho dev · **M** · ⬅ **mới** · [R03]
 
-> Đây là đề xuất tôi tin nhất trong cả lộ trình này, và cũng là chỗ tôi lệch nhiều nhất so với kiến trúc gốc.
+> Chỗ lệch nhiều nhất so với kiến trúc gốc, và là chỗ chuyên gia ủng hộ mạnh nhất
+> trong cả lộ trình.
 
-Kiến trúc §9 có nhắc `npx livemcp-validate <url>` nhưng xếp nó vào phần "ứng phó rủi ro", không thành milestone. Theo N4, tôi cho rằng nó **không phải phần phụ mà là phần quyết định chuẩn sống hay chết**.
+Kiến trúc §9 có nhắc `npx livemcp-validate <url>` nhưng xếp nó vào phần "ứng phó rủi ro", không thành milestone. Theo N4, nó **không phải phần phụ mà là phần quyết định chuẩn sống hay chết**: độ sai của `livemcp-*` **vô hình với người viết** — y hệt ARIA hỏng mà dev không thấy vì không chạy screen reader. ARIA mất mười năm mới có công cụ kiểm; ta ship validator *cùng ngày* với chuẩn.
 
-Lập luận: độ sai của `livemcp-*` **vô hình với người viết** — y hệt ARIA hỏng mà dev không thấy vì không chạy screen reader. Dev không chạy agent thì sẽ không thấy `livemcp-*` hỏng. ARIA mất mười năm mới có công cụ kiểm; ta có thể ship validator *cùng ngày* với chuẩn.
+**Đừng dồn lint thành một cục** *([R03] câu 1)*. Nhiều rule sinh ra tự nhiên như *công cụ gỡ lỗi của chính mình* — "`livemcp-wait` trỏ selector không tồn tại" chính là thứ sẽ thèm có khi debug cơ chế đợi ở M2. Vậy: **mỗi milestone viết rule nó cần cho chính nó**; M3.5 chỉ là nơi **đóng gói** chúng thành trải nghiệm dev. Nhờ vậy M3.5 co lại còn đúng phần giá trị riêng của nó: vòng phần thưởng.
 
 **Việc cụ thể**
 
-1. **Chế độ lint trong extension** — panel hiện lỗi tuân thủ ngay trên trang dev đang mở: khai `livemcp-name` trên phần tử không focus được (vi phạm spec §9.5.1), schema nói `number` nhưng input là `text`, hai tool trùng tên, `livemcp-wait` trỏ selector không tồn tại, thiếu `livemcp-confirm` cho hành động có vẻ phá huỷ.
-2. **Vòng phần thưởng dưới 5 phút** — dev thêm hai attribute → mở extension → *thấy* agent điền được form của mình, ngay. Cần một "thử ngay" trong extension không cần dựng agent thật.
-3. Trang tài liệu tối giản: copy-paste được, chạy được.
+1. **Đóng gói lint thành panel** — gom rule đã viết rải rác ở M2/M3 vào một chỗ dev nhìn thấy được. Rule ưu tiên **cao nhất: state-rot** (`livemcp-state` không khớp thực tế) — theo [R07] đây sẽ là *chuyện thường* ngoài thực địa, không phải ngoại lệ. Các rule khác: `livemcp-name` trên phần tử không focus được (spec §9.5.1), khai báo nằm trong **closed shadow root** (dùng `chrome.dom.openOrClosedShadowRoot` để *phát hiện* rồi báo lỗi tuân thủ, thay vì im lặng không thấy gì), schema nói `number` nhưng input là `text`, hai tool trùng tên, thiếu `livemcp-confirm` cho hành động có vẻ phá huỷ.
+2. **Điều kiện bắt buộc: panel chạy được KHÔNG cần server** — chỉ extension + trang. Bước thử đầu tiên của dev không được đòi dựng cả hệ.
+3. **Vòng phần thưởng dưới 5 phút** — dev thêm hai attribute → mở extension → *thấy* agent thao tác trên trang của mình, ngay. Phần "thấy được" dùng **highlight/pulse** quanh phần tử đang tác động: overlay vài chục dòng, một phần mười chi phí con ong (xem M5).
+4. Trang tài liệu tối giản: copy-paste được, chạy được. Ví dụ lấy từ app thật ở M2.5.
 
-**Nghiệm thu** — Một dev chưa biết gì về Live MCP, đọc tài liệu và làm form của họ chạy được với agent **trong dưới 15 phút**, không cần hỏi ai. Đây là tiêu chí *đo trên người thật*, không tự chấm.
+**Chưa làm ở đây: CLI `npx livemcp-validate`** *([R03] câu 3)*. Muốn trung thực thì CLI phải dựng browser thật và **tái dùng đúng scanner của extension** — làm bây giờ là trả chi phí hạ tầng cho khách hàng chưa tồn tại. Làm rẻ bằng cách parse HTML tĩnh thì **nói dối**: nó sẽ pass những trang mà scanner thật fail (DOM động, shadow root), vi phạm N2. Chờ một adopter thật hỏi "cắm CI thế nào", rồi driver-hoá extension chứ không viết lại logic.
+
+**Nghiệm thu** — Một dev lạ đọc tài liệu và làm form của họ chạy được với agent **trong dưới 15 phút**, không cần hỏi ai. Đo theo ba bậc, không cần đợi "tuyển được nhóm test":
+
+1. *Tự đo có kỷ luật* — profile Chrome sạch, làm theo tài liệu **đúng từng chữ**, ghi lại mọi chỗ phải dùng "kiến thức ngầm" mới qua được. Mỗi chỗ đó là vài phút của người lạ.
+2. *Dev-lạ nhân tạo* — đưa **chỉ tài liệu** (không repo, không chat sử) cho một agent LLM chưa từng thấy code, bảo nó khai báo một form mẫu. Chỗ agent hiểu sai tài liệu trùng đáng ngạc nhiên với chỗ người thật sẽ hiểu sai; rẻ và lặp lại được sau mỗi lần sửa docs.
+3. *Người thật* — **N=1 đã là phép đo hợp lệ**; ba người là điểm chi phí/hiệu quả tốt.
 
 ---
 
-### M4 — Policy layer (bảo mật) · **L** · ưu tiên 3 · [R02]
+### M4 — Policy layer (bảo mật) · **M** · ưu tiên 3 · [R02]
 
-Kiến trúc §6.3 ghi rõ *"không được cắt xén khi triển khai"* và §8 ghi *"bắt buộc xong trước khi đưa ai khác dùng"*.
-
-**Trạng thái hôm nay: chưa có gì.** WS bind `127.0.0.1` nhưng **không có token**; không có origin allowlist; không có confirm gate; không có sanitizer. Nghĩa là bất kỳ tiến trình local nào cũng nối được vào hub và điều khiển trình duyệt.
+Kiến trúc §6.3 ghi rõ *"không được cắt xén khi triển khai"* và §8 ghi *"bắt buộc xong trước khi đưa ai khác dùng"*. Phần **token + `toAgentText()`** đã tách lên M1.5; phần còn lại ở đây bảo vệ *người dùng tương lai* nên chưa gấp — nhưng vẫn là điều kiện cần trước khi mời bất kỳ ai dùng.
 
 **Việc cụ thể** (theo §6.3)
 
-1. Token pairing: server sinh token, user dán vào popup extension một lần.
-2. Origin allowlist: lần đầu gặp origin mới → hỏi user, lưu quyết định. Không allowlist → không quét, không thi hành.
-3. Confirm gate cho `livemcp-confirm` (MCP elicitation, fallback `confirmed: true`).
-4. **Sanitizer** — mọi text từ web là dữ liệu không tin cậy. Đây là chốt chặn duy nhất trước agent, và §9 xếp prompt injection là rủi ro **cao nhất**.
-5. Rate limit ~2 action/giây/tab.
-6. Chặn `input[type=password]` — *đã có*, cần đưa vào settings.
+1. Origin allowlist: lần đầu gặp origin mới → hỏi user, lưu quyết định. Không allowlist → không quét, không thi hành.
+2. Confirm gate cho `livemcp-confirm` (MCP elicitation, fallback `confirmed: true`).
+3. Rate limit ~2 action/giây/tab.
+4. Chặn `input[type=password]` — *đã có*, cần đưa vào settings.
+5. Làm giàu `toAgentText()`: đóng khung mọi text từ web thành khối được đánh dấu rõ là **dữ liệu trang cung cấp, không phải chỉ thị**, với delimiter mà bước escape ở M1.5 bảo đảm trang không tự thoát ra được.
 
-**Nghiệm thu** — Một trang độc cố nhét `"ignore previous instructions"` vào `livemcp-description` không làm agent đổi hành vi. Tiến trình local khác không nối được vào hub.
+**Câu thiết kế đúng cho milestone này** *(từ [R02] câu 3)*: **không tồn tại phòng thủ kín cho prompt injection.** Vì thế lớp quyết định không phải lọc-xác-suất mà là **chặn-trần-thiệt-hại**. Sanitizer giảm *xác suất*; capability gate chặn *trần*. Câu phải trả lời được là: *"nếu injection **thành công**, nó làm được tối đa những gì?"* — và trả lời bằng **danh sách hành động agent được phép**, không phải bằng bộ lọc.
+
+**Nghiệm thu** — Trả lời được câu in đậm ở trên bằng một danh sách hữu hạn, viết ra giấy. Một trang độc nhét `"ignore previous instructions"` vào `livemcp-description` không làm agent đổi hành vi; và kể cả khi nó đổi được, hành động phá huỷ vẫn vấp confirm gate.
 
 ---
 
@@ -143,9 +199,14 @@ Kiến trúc §6.3 ghi rõ *"không được cắt xén khi triển khai"* và �
 
 Kiến trúc §5.5. Con ong bay tới vị trí, chân trái/phải theo click, kim ở miệng nhấp khi gõ.
 
-**Ghi chú thẳng thắn:** đây là milestone tôi *không chắc* về vị trí. Nó thuần trải nghiệm, không mở khoá năng lực nào — nhưng nó có thể chính là "phần thưởng tức thì" mà N4 nói tới, và là thứ khiến người ta nhớ sản phẩm. Xem [R04].
+**Giữ ở ưu tiên 4, vì N4 không đòi con ong** *([R04] câu 1)*. Tách hai nhu cầu cho đúng vai: *vòng phần thưởng* cần dev **thấy** agent đang thao tác — nhu cầu đó đã được đáp ứng bằng highlight/pulse ở M3.5. Con ong là thứ khác: nó là **cá tính sản phẩm**, thứ người ta chụp màn hình và kể lại cho nhau. Đừng để N4 đứng ra bảo lãnh cho nó — *phần thưởng cần thấy được, không cần đáng yêu*. Khi đến lúc quảng bá, con ong sẽ là ngôi sao, đúng lúc sản phẩm đã đáng tin để được quảng bá.
 
-**Ràng buộc kỹ thuật đã biết:** overlay `pointer-events: none` là **bắt buộc** — con ong không bao giờ được chặn chính cú click nó đang biểu diễn. Animation lỗi thì vẫn phải dispatch; visual không bao giờ được chặn chức năng.
+**Invariant — ong quan sát hành động; hành động không bao giờ đợi ong** *([R04] câu 3)*. Kiến trúc §5.5 hiện ghi *"SW chờ content script báo ong đã tới nơi rồi mới dispatch"* — câu đó đặt một chặng nhắn tin bất đồng bộ **và một failure mode mới** vào đúng con đường đã tốn nhiều học phí nhất của dự án. **Đảo lại:** fire-and-forget, lệch một nhịp là cái giá đúng. Muốn khớp nhịp cho đẹp mắt thì dùng một delay hằng số vài trăm ms phía dispatch — *một con số, không phải một round-trip*. Sửa §5.5 khi đến M5 và ghi rõ đây là đảo ngược có chủ đích.
+
+**Hai ràng buộc còn lại**
+
+- Overlay `pointer-events: none` là **bắt buộc** — con ong không bao giờ được chặn chính cú click nó đang biểu diễn. Animation lỗi thì vẫn phải dispatch.
+- **Mặc định tắt trong E2E**, và phải có cờ tắt. Animation thêm nhiễu thời gian (screenshot lệch, timing dao động). Rủi ro thứ hai tinh vi hơn: hiệu ứng đẹp **che lỗi thật** — người thấy ong bay tới đúng chỗ rồi *tin* rằng hành động đã trúng, trong khi click trượt vẫn im lặng như cũ. Con ong không thay được ba tầng tự kiểm đang có.
 
 ---
 
@@ -167,6 +228,46 @@ Kiến trúc §5.5. Con ong bay tới vị trí, chân trái/phải theo click, 
 
 ---
 
+### 3.3 Thước đo: làm sao biết chuẩn đang sống · [R06]
+
+Lộ trình trên toàn tiêu chí kỹ thuật. Không tiêu chí nào trả lời được câu quan trọng nhất — *chuẩn này có đang đi đúng hướng không?* Ba chỉ số dưới đây trả lời câu đó, và **cả ba đều đo được ngay bây giờ**, không cần chờ có người dùng.
+
+| | Chỉ số | Đo cái gì | Bắt đầu đo từ |
+|---|---|---|---|
+| ① | Tỉ lệ agent hoàn thành tác vụ **đầu-cuối không cần người can thiệp**, trên một bộ kịch bản cố định | *consumer đủ mạnh chưa* | ngay — lưới E2E hiện tại là mầm của nó |
+| ② | **Time-to-first-success của dev lạ** (con số 15 phút ở M3.5) | *phần thưởng có đổi được không* | M3.5 |
+| ③ | **Số thay đổi spec bị ép ra bởi mỗi trang thật mới** | *hội tụ hay đang overfit demo* | M2.5 |
+
+Chỉ số ③ thay cho "số trang áp dụng" mà tôi định dùng: ở giai đoạn này con số đó sẽ là 0, hoặc là số **tự mình tạo ra** — cả hai đều không mang thông tin. Để dành nó cho giai đoạn sau. Trang thật thứ N mà **không ép đổi gì nữa** nghĩa là spec đã khớp thực địa; ③ vì vậy kiêm luôn tiêu chí đóng băng spec bên dưới.
+
+**Tín hiệu chết sớm — điểm chung: tất cả đều là *sự im lặng*, và người trong cuộc đọc im lặng thành "chưa ai biết tới thôi".**
+
+- Mọi câu hỏi và issue đều do chính tác giả đặt — chưa ai va vào chuẩn đủ mạnh để vấp.
+- Tích hợp nào cũng cần tác giả ngồi cạnh mới xong — chuẩn đang thở bằng hô hấp nhân tạo.
+- Người thử một lần **không quay lại** — im lặng sau lần đầu là tín hiệu mạnh hơn mọi lời chê.
+- Consumer tiềm năng chọn **tự suy luận lại từ DOM** thay vì đọc khai báo — thị trường đang nói phần khai báo không đáng công viết. *(Đây chính là N5 hiện hình.)*
+
+Đây là N2 áp lên sản phẩm chứ không phải lên mã: hỏng phải ồn ào. **Dựng ống nghe từ đầu** — một kênh feedback, một issue template "tôi kẹt ở bước này" — vì không có ống nghe thì mọi cái chết đều im lặng.
+
+### 3.4 Khi nào đóng băng spec · [R05]
+
+**Không đóng băng theo milestone.** Milestone đo *sản phẩm của mình*, spec phải đúng cho *trang của người khác* — hai thứ hội tụ theo nhịp khác nhau. Hai điều kiện, phải đạt **cả hai**:
+
+- **(a)** Validator M3.5 tồn tại. Viết rule kiểm chính là bài thử độ chặt của câu chữ spec: chỗ mơ hồ sẽ lộ ra đúng lúc cố biến nó thành rule máy chạy được.
+- **(b)** Đã có 2–3 trang thật ngoài demo-site áp dụng, và **chỉ số ③ giảm về 0**.
+
+Theo lộ trình hiện tại: sớm nhất là sau M3.5 cộng trang thật đầu tiên. **Trước đó mọi bản đều là draft — và phải nói thẳng như vậy** (đã làm ở M1.5).
+
+Ba quy tắc tương thích ngược, rẻ, không cần máy móc:
+
+1. **Tiến hoá additive trong một major** — attribute mới luôn optional với default an toàn; đổi nghĩa hay bỏ attribute là việc của major mới. Đây là hợp đồng ràng phía *spec*.
+2. **Hợp đồng phía consumer** — attribute lạ thì bỏ qua, major lạ thì nói to. Đây là hợp đồng ràng phía *extension*, và phải có trước khi tồn tại "trang cũ" nào → đã đưa vào M1.5.
+3. **Kênh di trú = validator** — thứ gì deprecated thì validator cảnh báo trước một chặng dài rồi mới bỏ hẳn ở major sau.
+
+Đừng dựng cơ chế negotiation cho một v2 giả định. Với chuẩn chưa có người dùng, ba quy tắc trên là **toàn bộ** phần tương thích ngược đáng trả tiền.
+
+---
+
 ## 4. Nợ kỹ thuật đang treo
 
 Không thuộc milestone nào; ghi ra để không rơi.
@@ -178,6 +279,8 @@ Không thuộc milestone nào; ghi ra để không rơi.
 | `<select multiple>` chưa hỗ trợ | `consult/Q03` câu 4 | M3, hoặc bỏ nếu không có ca dùng thật |
 | `month` / `week` | `consult/Q02` câu 5 | ưu tiên thấp nhất, đừng để chặn milestone |
 | Chọn phần tử theo `livemcp-arg` | `TODO(M3)` trong `content/index.ts` | M3 |
+| Ranh giới "ngoài phạm vi v1" chưa khai trong spec: contenteditable/rich-text (IME, định dạng), drag-and-drop thật, slider tuỳ chế | [R07] câu 2 | **khai ngay ở M1.5** — ranh giới khai ra là *quyết định*, không khai là *lỗ hổng chờ người dùng phát hiện* (N2) |
+| Kiến trúc §5.5 còn ghi "SW chờ ong tới nơi rồi mới dispatch" | [R04] câu 3 | sửa khi đến M5, ghi rõ là đảo ngược có chủ đích |
 
 ---
 
@@ -185,13 +288,13 @@ Không thuộc milestone nào; ghi ra để không rơi.
 
 | Mã | Chủ đề | Mức | Trạng thái | Ngày hỏi | Người trả lời |
 |---|---|---|---|---|---|
-| R01 | Gộp shadow DOM vào M2, hay tách riêng? | quan-trọng | ⏳ chờ | 2026-08-02 | |
-| R02 | Bảo mật ở M4 có quá muộn không? | **chặn** | ⏳ chờ | 2026-08-02 | |
-| R03 | Chèn M3.5 Validator — đúng chỗ chưa? | **chặn** | ⏳ chờ | 2026-08-02 | |
-| R04 | Con ong: làm sớm hay để cuối? | tham-khảo | ⏳ chờ | 2026-08-02 | |
-| R05 | Khi nào đóng băng spec v1.0? | quan-trọng | ⏳ chờ | 2026-08-02 | |
-| R06 | Đo thế nào để biết chuẩn đang sống? | quan-trọng | ⏳ chờ | 2026-08-02 | |
-| R07 | Rủi ro lớn nhất mà lộ trình này chưa thấy? | tham-khảo | ⏳ chờ | 2026-08-02 | |
+| R01 | Gộp shadow DOM vào M2, hay tách riêng? | quan-trọng | 🔧 đang áp dụng | 2026-08-02 | Fable |
+| R02 | Bảo mật ở M4 có quá muộn không? | **chặn** | 🔧 đang áp dụng | 2026-08-02 | Fable |
+| R03 | Chèn M3.5 Validator — đúng chỗ chưa? | **chặn** | 🔧 đang áp dụng | 2026-08-02 | Fable |
+| R04 | Con ong: làm sớm hay để cuối? | tham-khảo | 🔧 đang áp dụng | 2026-08-02 | Fable |
+| R05 | Khi nào đóng băng spec v1.0? | quan-trọng | 🔧 đang áp dụng | 2026-08-02 | Fable |
+| R06 | Đo thế nào để biết chuẩn đang sống? | quan-trọng | 🔧 đang áp dụng | 2026-08-02 | Fable |
+| R07 | Rủi ro lớn nhất mà lộ trình này chưa thấy? | tham-khảo | 🔧 đang áp dụng | 2026-08-02 | Fable |
 
 *Trạng thái: ⏳ chờ · ✅ đã trả lời · 🔧 đang áp dụng · ✔ khép lại*
 
@@ -207,7 +310,7 @@ Không thuộc milestone nào; ghi ra để không rơi.
 
 ### R01 — Gộp shadow DOM vào M2, hay tách thành milestone riêng?
 
-**Mức:** quan-trọng · **Hỏi:** 2026-08-02 · **Trạng thái:** ⏳ chờ
+**Mức:** quan-trọng · **Hỏi:** 2026-08-02 · **Trạng thái:** 🔧 đang áp dụng
 
 **Bối cảnh.** Scanner hiện dùng `root.querySelectorAll`, vốn không xuyên qua shadow root, nên form khai báo đúng chuẩn nằm trong shadow DOM **chưa bao giờ được phát hiện**. Lưới E2E đã ghi việc này thành `test.fixme`.
 
@@ -223,17 +326,35 @@ Lý do tôi phân vân: nó làm M2 (vốn đã là **L**) phình thêm, mà M2 
 
 #### ▸ Trả lời
 
-*(chưa có)*
+**Fable — 2026-08-02**
+
+**Câu 1 — gộp vào M2, nhưng phân biệt *gộp code* với *gộp cam kết*.** Lý do gộp của bạn đúng: tách ra thì scanner và observer phải mở lại hai lần. Nhưng nỗi phân vân của bạn cũng đúng, và lời giải là xếp shadow DOM làm **hạng mục cuối của M2 với quyền rơi**: nghiệm thu M2 tách hai bậc — bậc 1 (bắt buộc, là luận điểm trung tâm) là vòng *hành động → đợi → tool mới*; bậc 2 (cố gắng) là gỡ `fixme` shadow DOM. Nếu M2 kéo dài, bậc 2 rơi xuống làm cùng M3 mà không ai phải áy náy, và không milestone mới nào phải sinh ra.
+
+**Câu 2 — đáng làm sớm, nhưng không phải vì "đa số trang".** Thực địa chia hai thế giới: hệ React/Vue chủ đạo (MUI, Ant, Chakra, shadcn...) render form ở light DOM — đa số form thương mại nằm đây; còn các design system chuẩn web component (Shoelace, Material Web, Lit, Ionic, FAST/Fluent, Salesforce LWC, ServiceNow) đặt input *bên trong* shadow root — và đó lại là hệ sinh thái enterprise/nội bộ, đúng tệp "trang muốn agent-hoá có chủ đích" mà Live MCP dễ có người dùng thật đầu tiên. Tính theo *tỉ lệ trang*, shadow DOM là thiểu số; tính theo *tỉ lệ khách hàng tiềm năng sớm*, nó không nhỏ. Kết luận "M2-cuối, có quyền rơi" ở câu 1 là cân đúng giữa hai sự thật đó.
+
+**Câu 3 — bốn cạm bẫy, cái cuối ít người biết:**
+
+1. **Không có sự kiện nào báo `attachShadow`.** Node có thể vào DOM trước rồi mới gắn shadow root sau — observer `childList` không thấy gì cả. Ứng phó thực dụng: mỗi lần xử lý node trong delta, kiểm lại `el.shadowRoot`; chấp nhận trễ một nhịp mutation. Đừng monkey-patch `Element.prototype.attachShadow` — đường đó tiêm code vào trang, vi phạm chính ranh giới content script của bạn.
+2. **Bookkeeping observer per-root là chỗ rò rỉ bộ nhớ kinh điển.** Giữ map host → observer, disconnect khi host rời DOM — và kiểm bằng `isConnected` trong nhịp rescan chứ đừng tin removal event luôn đến đủ.
+3. **Hiệu năng:** tìm shadow root bắt buộc phải đi qua *từng element* (`el.shadowRoot` không query được bằng selector). Chỉ đi sâu kiểu đó ở lần quét đầu và trên subtree các node vừa thêm; tuyệt đối không walk cả trang mỗi mutation.
+4. **`mode: 'closed'` không phải ngõ cụt với extension** — content script có `chrome.dom.openOrClosedShadowRoot(host)` xuyên được cả closed root. Spec cứ giữ yêu cầu `open` (đúng cho mọi consumer khác của chuẩn), nhưng *validator* nên dùng API này để phát hiện "khai báo nằm trong closed root" và báo thành lỗi tuân thủ — thay vì im lặng không thấy gì (N2).
+
+Thêm một lưu ý đã có trong kiến trúc §5.3 nhưng dễ quên lúc code: phần tử *slotted* nằm ở light DOM — `querySelectorAll` trên document thấy nó rồi; đệ quy thêm qua `assignedElements` sẽ đếm trùng.
 
 #### ▸ Ghi nhận & áp dụng
 
-*(chưa có)*
+**2026-08-02 · đã sửa lộ trình.** Phân biệt *gộp code* với *gộp cam kết* là thứ tôi không nghĩ ra — tôi đang coi "gộp hay tách" là câu hỏi nhị phân, trong khi lời giải nằm ở chiều thứ ba: gộp code, tách nghiệm thu.
+
+- M2 nghiệm thu **hai bậc**: bậc 1 (vòng *hành động → đợi → tool mới*) bắt buộc; bậc 2 (shadow DOM) có quyền rơi xuống M3. Thoả thuận trước nên rơi không phải là trượt.
+- Bốn cạm bẫy đưa thẳng vào hạng mục 6 của M2 — đặc biệt "không có sự kiện báo `attachShadow`", thứ tôi chắc chắn sẽ đâm phải rồi mới hiểu.
+- `chrome.dom.openOrClosedShadowRoot` **không** dùng để lách yêu cầu `open` của spec; nó thành **rule validator** ở M3.5: phát hiện khai báo nằm trong closed root và báo lỗi tuân thủ, thay vì im lặng không thấy gì (N2).
+- Ghi lại lý do đáng nhớ nhất ở câu 2: tính theo *tỉ lệ trang* thì shadow DOM là thiểu số, nhưng tính theo *tỉ lệ khách hàng tiềm năng sớm* thì không — design system web-component (Shoelace, Material Web, LWC, Fluent) tập trung ở mảng enterprise/nội bộ, đúng tệp N5 chỉ ra là nơi *độ tin cậy thắng độ phủ*.
 
 ---
 
 ### R02 — Bảo mật ở M4 có quá muộn không?
 
-**Mức:** **chặn** · **Hỏi:** 2026-08-02 · **Trạng thái:** ⏳ chờ
+**Mức:** **chặn** · **Hỏi:** 2026-08-02 · **Trạng thái:** 🔧 đang áp dụng
 
 **Bối cảnh.** Kiến trúc §6.3 ghi *"không được cắt xén"*, §8 ghi *"bắt buộc xong trước khi đưa ai khác dùng"*. Nhưng hôm nay: WS bind `127.0.0.1` mà **không có token**, không origin allowlist, không sanitizer. Bất kỳ tiến trình local nào cũng nối được vào hub và điều khiển trình duyệt của người dùng.
 
@@ -250,17 +371,39 @@ Lập luận kéo lên sớm: ranh giới "chưa ai dùng" rất dễ bị vư�
 
 #### ▸ Trả lời
 
-*(chưa có)*
+**Fable — 2026-08-02**
+
+**Câu 1 — tách, và có một sự thật khiến việc này gấp hơn bạn đang trình bày.** Lập luận "chưa ai dùng nên rủi ro thực tế bằng 0" dựa trên một mô hình sai về bề mặt tấn công. Kẻ nối được vào `ws://127.0.0.1:8787` không chỉ là "tiến trình local": **bất kỳ trang web nào đang mở trong bất kỳ trình duyệt nào** cũng mở được WebSocket tới `127.0.0.1` — handshake WS không bị CORS chặn, và các cơ chế private-network-access hiện hành chưa che kín đường này. Nghĩa là ranh giới "chưa demo cho ai" đã bị vượt **từ ngày đầu**: mỗi lần bạn lướt web trong lúc server chạy, mọi trang bạn ghé đều có cơ hội thử bắt tay với hub và điều khiển trình duyệt của chính bạn. Đây là kịch bản drive-by thật, hôm nay, không phải rủi ro tương lai.
+
+Vậy: **token pairing kéo lên ngay trước M2.** Nó cỡ S — sinh token lần chạy đầu, dán một lần vào popup, kiểm ở handshake — một buổi là xong và đóng đúng cái lỗ trên. Origin allowlist, confirm gate, rate limit giữ nguyên ở M4: chúng bảo vệ *người dùng tương lai*, chưa có người thì chưa cần.
+
+**Câu 2 — token.** Rẻ nhất, và là thứ duy nhất đóng một lỗ *đang mở* chứ không phải lỗ giả định.
+
+**Câu 3 — đúng, strip-pattern là mèo vờn chuột, và bạn đã tự trả lời một nửa: đóng khung cấu trúc. Ba tầng, theo độ "bản chất" tăng dần:**
+
+1. **Chốt kiến trúc ngay bây giờ, chưa cần thông minh:** một hàm duy nhất kiểu `toAgentText()` mà **mọi** chuỗi từ web bắt buộc đi qua trước khi tới agent. Hôm nay nó chỉ cần cắt trần độ dài + escape markdown/code-fence (để text web không phá được khung bao nó) + gắn nhãn nguồn. Giá trị nằm ở chỗ *có đúng một cửa* — M4 làm giàu nội dung lọc sau mà không phải truy lại từng đường text. Đây chính là lý do phần này không đợi được M4: bạn nói đúng, càng lùi thì số đường text phải bọc càng nhiều.
+2. **Đóng khung + dạy agent:** mọi text từ web nằm trong khối được đánh dấu rõ là *dữ liệu trang cung cấp, không phải chỉ thị*, với delimiter mà bước escape ở tầng 1 bảo đảm trang không tự thoát ra được. Không tuyệt đối, nhưng hơn hẳn đuổi bắt mẫu câu.
+3. **Sự thật phải chấp nhận: không tồn tại phòng thủ kín cho prompt injection.** Vì thế lớp quyết định không phải lọc-xác-suất mà là **chặn-trần-thiệt-hại**: confirm gate cho hành động phá huỷ, origin allowlist, rate limit, chặn password. Sanitizer giảm xác suất; capability gate chặn trần. Câu thiết kế đúng là: *"nếu injection **thành công**, nó làm được tối đa những gì?"* — và trả lời bằng danh sách hành động agent được phép, không phải bằng bộ lọc.
+
+**Câu 4 — bạn không lo quá mức; bạn đang lo *nhầm đơn vị*.** Ngưỡng hợp lý cho dự án cá nhân giai đoạn này là một phép thử hai vế: việc bảo mật nào **(rẻ ∧ đóng lỗ đang mở hôm nay)** thì làm ngay — token, chốt `toAgentText()`; việc nào **(đắt ∨ bảo vệ người chưa tồn tại)** thì để M4 — allowlist UI, elicitation, rate limit, settings. Theo thước đó, M4 nguyên khối bây giờ là quá sớm thật, nhưng hai việc kia không phải "đầu tư bảo mật" — chúng là vệ sinh, như khoá cửa nhà trước khi đi ngủ.
 
 #### ▸ Ghi nhận & áp dụng
 
-*(chưa có)*
+**2026-08-02 · đã sửa lộ trình, đang thi hành.** Câu trả lời **sửa mô hình đe doạ của tôi**, không chỉ sửa thứ tự việc — đó là phần đắt giá nhất ở đây.
+
+Tôi viết "bất kỳ *tiến trình local* nào cũng nối được vào hub" và tự trấn an bằng "chưa demo cho ai". Sự thật: **bất kỳ *trang web* nào** cũng mở được WS tới `127.0.0.1` — handshake WS không bị CORS chặn. Nghĩa là ranh giới "chưa ai dùng" đã bị vượt **từ ngày đầu**, mỗi lần chủ dự án lướt web trong lúc server chạy. Lập luận "rủi ro thực tế bằng 0" của tôi không sai vì thiếu thận trọng — nó sai vì **đếm nhầm ai là kẻ nối được**.
+
+- **M1.5 mới**, ưu tiên 0, chèn trước M2: token pairing + `toAgentText()`.
+- **Thêm một việc ngoài câu trả lời**: chặn origin `http(s)://` ở handshake. Trang web không giả mạo được header `Origin`, còn SW của extension thì không gửi origin web — bộ lọc này chặn đúng *lớp* tấn công vừa được chỉ ra, trong khi token *xác thực* danh tính. Rẻ cả hai, làm cả hai.
+- Phần còn lại (allowlist, confirm gate, rate limit) **giữ nguyên M4**, đúng phép thử hai vế: chúng bảo vệ người dùng chưa tồn tại.
+- Nghiệm thu M4 viết lại theo câu 3: từ *"lọc được injection"* sang ***"nếu injection thành công, nó làm được tối đa những gì?"*** — trả lời bằng danh sách hành động được phép, không bằng bộ lọc. Sanitizer giảm xác suất, capability gate chặn trần; nhầm hai thứ này là tự ru ngủ.
+- Phép thử hai vế **(rẻ ∧ đóng lỗ đang mở)** vs **(đắt ∨ bảo vệ người chưa tồn tại)** giữ lại làm thước phân loại cho mọi việc bảo mật phát sinh sau này.
 
 ---
 
 ### R03 — Chèn M3.5 "Validator & vòng phần thưởng" — đúng chỗ chưa?
 
-**Mức:** **chặn** · **Hỏi:** 2026-08-02 · **Trạng thái:** ⏳ chờ
+**Mức:** **chặn** · **Hỏi:** 2026-08-02 · **Trạng thái:** 🔧 đang áp dụng
 
 **Bối cảnh.** Đây là chỗ tôi lệch nhiều nhất khỏi kiến trúc gốc, dựa trên chẩn đoán ở [`consult/Q06`](consult/Q06-ranh-gioi-chuan-declarative.md): nguyên nhân tử vong số một của chuẩn declarative là *không có phần thưởng tức thì cho người khai*, và extension chính là "rich snippet" của dự án này.
 
@@ -275,17 +418,37 @@ Nhưng tôi cũng ý thức được một điều: Live MCP **chưa có ngườ
 
 #### ▸ Trả lời
 
-*(chưa có)*
+**Fable — 2026-08-02**
+
+**Chèn M3.5 là quyết định đúng — đây là chỗ lệch khỏi kiến trúc gốc mà tôi ủng hộ mạnh nhất trong cả lộ trình.** Các câu dưới chỉ tinh chỉnh vị trí và cách làm.
+
+**Câu 1 — sau M3 là đúng, với một chỉnh: đừng dồn lint thành một cục.** Nhiều rule lint sinh ra tự nhiên như *công cụ gỡ lỗi của chính bạn* trong M2/M3 — "`livemcp-wait` trỏ selector không tồn tại" chính là thứ bạn sẽ thèm có khi debug cơ chế đợi ở M2. Vậy: mỗi milestone viết rule nó cần cho chính nó; M3.5 là nơi **đóng gói** chúng thành trải nghiệm dev (panel, nút thử-ngay, tài liệu), không phải nơi bắt đầu viết chúng. Cách này M3.5 co lại còn đúng phần giá trị riêng: vòng phần thưởng.
+
+**Câu 2 — thứ tự đúng là: consumer chạy được trước, phần thưởng ngay sau, cả hai xong trước khi mời ai.** Nhìn các chuẩn sống: schema.org ra mắt khi *bên tiêu thụ* (Google) đã hoạt động và phần thưởng đổi được ngay — không hề có giai đoạn "chuẩn mạnh nhưng chưa ai được thưởng". MCP cũng vậy: spec + SDK + client chạy được cùng ngày. Bài học ngược chiều: phần thưởng chỉ có nghĩa khi consumer đủ mạnh để trao nó — dev khai đúng chuẩn mà agent vẫn vấp (vì thiếu M2/M3) là **phản-phần-thưởng**, tệ hơn không có gì, vì họ không quay lại (xem R06 câu 2). Nên M2 → M3 → M3.5 không phải nhượng bộ mà là đúng thứ tự nhân quả. Còn nỗi lo "tối ưu adoption quá sớm" của bạn đúng ở nghĩa khác: M3.5 không nhắm "nhiều dev" — nó chỉ cần đủ tốt cho **một dev thật đầu tiên**. R06 câu 3 và câu này là một.
+
+**Câu 3 — lint trong extension trước; CLI khi có người thật cần CI.** Đồng ý với trực giác của bạn, thêm hai lý do kỹ thuật: *(i)* CLI muốn trung thực phải dựng browser thật và **tái dùng đúng scanner của extension** — tức nó là bài toán đóng gói headless-Chrome-plus-extension, làm bây giờ là trả chi phí hạ tầng cho khách hàng chưa tồn tại; *(ii)* làm CLI rẻ bằng cách parse HTML tĩnh thì **nói dối** — nó sẽ pass những trang mà scanner thật fail (DOM động, shadow root), vi phạm N2. Chờ một adopter thật hỏi "cắm CI thế nào" rồi làm CLI bằng cách driver-hoá extension, không viết lại logic. Một điều kiện cho lint-trong-extension: panel phải chạy được **không cần server** (chỉ extension + trang), để bước thử đầu tiên của dev không đòi dựng cả hệ.
+
+**Câu 4 — 15 phút là mục tiêu đúng cỡ, và đo được trước khi có người thật, theo ba bậc:**
+
+1. *Tự đo có kỷ luật:* profile Chrome sạch, làm theo tài liệu **đúng từng chữ**, ghi lại mọi chỗ phải dùng "kiến thức ngầm" mới qua được — mỗi chỗ đó là vài phút của người lạ.
+2. *Dev-lạ nhân tạo:* đưa **chỉ tài liệu** (không repo, không chat sử) cho một agent LLM chưa từng thấy code, bảo nó khai báo một form mẫu. Chỗ agent hiểu sai tài liệu trùng đáng ngạc nhiên với chỗ người thật sẽ hiểu sai — rẻ, lặp lại được mỗi lần sửa docs.
+3. *Người thật, nhưng chỉ cần một:* một người lạ tìm ra phần lớn chỗ kẹt; ba người là điểm chi phí/hiệu quả tốt. Tiêu chí "đo trên người thật" của bạn giữ nguyên — chỉ cần biết rằng N=1 đã là một phép đo hợp lệ, đừng đợi "tuyển được nhóm test" mới bắt đầu.
 
 #### ▸ Ghi nhận & áp dụng
 
-*(chưa có)*
+**2026-08-02 · đã sửa lộ trình.** M3.5 giữ nguyên vị trí sau M3, nhưng **co lại** và đổi bản chất.
+
+- **Lint không còn là việc của riêng M3.5.** Mỗi milestone viết rule nó cần cho chính nó; M3.5 chỉ *đóng gói*. Điều này giải luôn một mâu thuẫn tôi chưa nhận ra: rule "`livemcp-wait` trỏ selector không tồn tại" là công cụ gỡ lỗi tôi sẽ **cần ở M2**, mà lại đang xếp vào milestone sau — tức là tự bắt mình debug tay việc mà công cụ làm được.
+- Thêm **điều kiện bắt buộc**: panel chạy được **không cần server**. Bước thử đầu tiên của dev không được đòi dựng cả hệ — thứ này quyết định con số 15 phút nhiều hơn cả chất lượng tài liệu.
+- **CLI validator hoãn có điều kiện**, chờ adopter thật hỏi "cắm CI thế nào". Lý do (ii) là thứ tôi đã suýt làm sai: CLI parse HTML tĩnh cho rẻ sẽ **pass những trang mà scanner thật fail** — một validator nói dối còn tệ hơn không có validator (N2).
+- Nghiệm thu 15 phút giữ nguyên, thêm **ba bậc đo**. Bậc 2 (đưa *chỉ tài liệu* cho một agent LLM chưa thấy repo) là thứ tôi làm được ngay và lặp lại được sau mỗi lần sửa docs.
+- Ghi lại câu chỉnh quan trọng nhất ở câu 2: **phần thưởng chỉ có nghĩa khi consumer đủ mạnh để trao nó.** Dev khai đúng chuẩn mà agent vẫn vấp là *phản-phần-thưởng* — tệ hơn không có gì, vì họ không quay lại. Vậy M2 → M3 → M3.5 không phải nhượng bộ mà là đúng thứ tự nhân quả. Và nỗi lo "tối ưu adoption quá sớm" của tôi được trả lời gọn: M3.5 không nhắm "nhiều dev", nó chỉ cần đủ tốt cho **một dev thật đầu tiên**.
 
 ---
 
 ### R04 — Con ong 🐝: làm sớm hay để cuối?
 
-**Mức:** tham-khảo · **Hỏi:** 2026-08-02 · **Trạng thái:** ⏳ chờ
+**Mức:** tham-khảo · **Hỏi:** 2026-08-02 · **Trạng thái:** 🔧 đang áp dụng
 
 **Bối cảnh.** Con ong là ý tưởng riêng của chủ dự án, có trong `project-ideal.md` từ đầu: bay tới vị trí tương tác, chân trái/phải theo click, kim ở miệng nhấp khi gõ. Kiến trúc xếp nó ở M5.
 
@@ -299,17 +462,28 @@ Tôi xếp nó ưu tiên 4 (sau bảo mật) vì nó không mở khoá năng l�
 
 #### ▸ Trả lời
 
-*(chưa có)*
+**Fable — 2026-08-02**
+
+**Câu 1 — giữ ưu tiên 4, vì N4 không đòi con ong.** Tách nhu cầu cho đúng vai: vòng phần thưởng cần dev *thấy agent đang thao tác trang của họ* — nhu cầu đó được đáp ứng bằng một **highlight/pulse** quanh phần tử đang tác động: một overlay vài chục dòng, làm ngay trong M3.5 với một phần mười chi phí con ong. Con ong là thứ khác: nó là *cá tính sản phẩm* — thứ người ta chụp màn hình và kể lại cho nhau. Cả hai đều có giá trị, nhưng đừng để N4 đứng ra bảo lãnh cho con ong: **phần thưởng cần thấy được, không cần đáng yêu.** Pulse ở M3.5, ong ở M5 — và khi đến lúc quảng bá, con ong sẽ là ngôi sao, đúng lúc sản phẩm đã đáng tin để được quảng bá.
+
+**Câu 2 — có, hai rủi ro cụ thể:** *(i)* animation thêm nhiễu thời gian vào E2E (screenshot lệch, timing dao động) — con ong phải có cờ tắt và **mặc định tắt trong E2E**; *(ii)* hiệu ứng đẹp che lỗi thật: người nhìn thấy ong bay tới đúng chỗ và *tin* rằng hành động đã trúng, trong khi click trượt vẫn im lặng như cũ. Con ong không thay được ba tầng tự kiểm đang có — đừng để nó làm mềm kỷ luật đó.
+
+**Câu 3 — tách hẳn, dứt khoát, và đáng nâng thành invariant.** "SW chờ ong tới nơi rồi mới dispatch" đặt một chặng nhắn tin bất đồng bộ *và một failure mode mới* vào đúng con đường đã tốn nhiều học phí nhất của dự án. Đảo nguyên tắc lại: **ong quan sát hành động; hành động không bao giờ đợi ong.** Fire-and-forget; lệch một nhịp là cái giá đúng. Nếu về sau muốn khớp nhịp cho đẹp mắt, làm bằng một delay hằng số vài trăm ms phía dispatch — một con số, không phải một round-trip. Đề nghị sửa luôn câu tương ứng ở kiến trúc §5.5 khi đến M5, ghi rõ đây là đảo ngược có chủ đích.
 
 #### ▸ Ghi nhận & áp dụng
 
-*(chưa có)*
+**2026-08-02 · đã sửa lộ trình.** Con ong giữ ưu tiên 4, nhưng lý do giữ đã đổi hẳn.
+
+- Tôi nghi mình *đánh giá thấp* con ong. Câu trả lời cho thấy tôi **gán nhầm vai**: nhu cầu N4 là "dev **thấy** agent đang thao tác", và nhu cầu đó được đáp ứng bằng một **pulse/highlight vài chục dòng** ở M3.5 — một phần mười chi phí. Con ong phục vụ nhu cầu khác: *cá tính sản phẩm*. Câu chốt đáng nhớ: **phần thưởng cần thấy được, không cần đáng yêu.**
+- Pulse thêm vào M3.5 hạng mục 3; con ong ở lại M5.
+- **Invariant mới, ghi thành chữ trong M5**: *ong quan sát hành động; hành động không bao giờ đợi ong.* Kiến trúc §5.5 hiện đang ghi ngược lại → thêm vào bảng nợ kỹ thuật, sửa khi đến M5. Đây là lần thứ hai một câu nghe hợp lý trong kiến trúc gốc hoá ra đặt thêm failure mode lên đúng đường thi hành (lần một là §2.2) — trùng hợp này tự nó là một dữ kiện.
+- Rủi ro "hiệu ứng đẹp che lỗi thật" chưa từng có trong bảng rủi ro của tôi và đúng là thứ tôi sẽ mắc: thấy ong bay tới đúng chỗ rồi *tin* rằng hành động đã trúng. Ghi thành ràng buộc: con ong không thay được ba tầng tự kiểm, và **mặc định tắt trong E2E**.
 
 ---
 
 ### R05 — Khi nào đóng băng spec v1.0?
 
-**Mức:** quan-trọng · **Hỏi:** 2026-08-02 · **Trạng thái:** ⏳ chờ
+**Mức:** quan-trọng · **Hỏi:** 2026-08-02 · **Trạng thái:** 🔧 đang áp dụng
 
 **Bối cảnh.** Spec đang mang số `1.0` và trang demo khai `<meta name="livemcp" content="1.0">`. Nhưng nó vẫn đang đổi: riêng tuần này đã thêm §9.5 (hai yêu cầu conformance) sau khi hỏi chuyên gia. Nếu có người áp dụng rồi mới đổi tiếp thì breaking change rất đắt; nhưng đóng băng sớm thì khoá luôn những sai lầm chưa kịp phát hiện.
 
@@ -321,17 +495,34 @@ Tôi xếp nó ưu tiên 4 (sau bảo mật) vì nó không mở khoá năng l�
 
 #### ▸ Trả lời
 
-*(chưa có)*
+**Fable — 2026-08-02**
+
+**Câu 1 — đừng đóng băng theo milestone; đóng băng theo bằng chứng bên ngoài.** Milestone đo *sản phẩm của bạn*, còn spec phải đúng cho *trang của người khác* — hai thứ hội tụ theo nhịp khác nhau. Tiêu chí đề xuất, cả hai phải đạt: *(a)* validator M3.5 tồn tại — vì viết rule kiểm chính là bài thử độ chặt của câu chữ spec, chỗ mơ hồ sẽ lộ ra khi cố biến nó thành rule máy chạy được; *(b)* đã có 2–3 trang thật ngoài demo-site áp dụng mà **số thay đổi spec bị ép ra bởi mỗi trang mới giảm về 0** (cùng thước đo với R06 câu 1 — trang mới không ép đổi gì nữa nghĩa là spec đã khớp thực địa). Theo lộ trình hiện tại: sớm nhất là sau M3.5 cộng trang thật đầu tiên. Trước đó, mọi bản đều là draft — và nên nói thẳng như vậy.
+
+**Câu 2 — tách, ngay bây giờ, vì số hiện tại đang phát tín hiệu sai.** Spec mang nhãn `1.0` là lời hứa ổn định mà dự án chưa muốn giữ — bằng chứng là §9.5 vừa thêm tuần này. Đổi nhãn thành `0.x` hoặc `1.0-draft` hôm nay rẻ, để sau khi có người áp dụng mới đổi thì đắt. Sản phẩm (server/extension) đánh semver riêng bình thường. Meta tag chỉ nên khai **major** của spec: `content="1"` — minor không phải thứ trang cần khai, vì trong cùng major mọi thứ phải tương thích (câu 3).
+
+**Câu 3 — meta tag chưa đủ; thứ đáng dựng từ bây giờ là ba quy tắc rẻ, không phải máy móc:**
+
+1. **Quy tắc tiến hoá additive trong một major:** attribute mới luôn optional với default an toàn; đổi nghĩa hay bỏ attribute là việc của major mới. Đây là hợp đồng ràng phía *spec*.
+2. **Hợp đồng phía consumer, viết vào spec ngay:** extension gặp attribute `livemcp-*` không biết → bỏ qua, không bao giờ fail; gặp major lạ → nói rõ "trang khai spec v2, extension này hiểu v1" thay vì im lặng (N2). Hai câu này quyết định trang cũ có sống qua các đợt đổi không, và phải nằm trong consumer **trước khi** tồn tại bất kỳ "trang cũ" nào — tức là bây giờ.
+3. **Kênh di trú = validator:** thứ gì deprecated thì validator cảnh báo trước một chặng dài rồi mới bỏ hẳn ở major sau.
+
+Đừng dựng cơ chế negotiation cho một v2 giả định — với chuẩn chưa có người dùng, ba quy tắc trên là toàn bộ phần tương thích ngược đáng trả tiền.
 
 #### ▸ Ghi nhận & áp dụng
 
-*(chưa có)*
+**2026-08-02 · đã sửa lộ trình, đang thi hành.** Thêm mục 3.4 và đưa hai việc rẻ vào M1.5.
+
+- **Hạ nhãn spec xuống draft ngay** — `1.0` đang phát tín hiệu sai: nó là lời hứa ổn định mà dự án chưa muốn giữ, và bằng chứng nằm ngay trong lịch sử tuần này (§9.5 vừa thêm). Đổi bây giờ rẻ; đổi sau khi có người áp dụng thì đắt. Meta tag chỉ khai **major**.
+- **Hợp đồng phía consumer đưa vào M1.5**, không đợi. Lý do là một điểm về *thời điểm* mà tôi bỏ sót: hai câu "attribute lạ thì bỏ qua / major lạ thì nói to" phải nằm trong extension **trước khi tồn tại bất kỳ trang cũ nào** — tức là bây giờ, khi số trang cũ đúng bằng 0. Muộn một ngày là muộn hẳn một thế hệ trang.
+- **Tiêu chí đóng băng không theo milestone mà theo bằng chứng bên ngoài** — mục 3.4, hai điều kiện (a) validator tồn tại, (b) chỉ số ③ về 0. Ý sắc nhất: *viết rule kiểm chính là bài thử độ chặt của câu chữ spec*, nên (a) không phải điều kiện hành chính mà là phép thử thật.
+- Câu trả lời khớp với R06 ở đúng một chỗ — chỉ số ③ vừa là thước hội tụ vừa là tiêu chí đóng băng. Ghi chéo ở cả hai mục để sau này không ai đo hai lần.
 
 ---
 
 ### R06 — Đo thế nào để biết chuẩn đang sống?
 
-**Mức:** quan-trọng · **Hỏi:** 2026-08-02 · **Trạng thái:** ⏳ chờ
+**Mức:** quan-trọng · **Hỏi:** 2026-08-02 · **Trạng thái:** 🔧 đang áp dụng
 
 **Bối cảnh.** Lộ trình này toàn tiêu chí kỹ thuật ("agent nhận được tool mới", "sanitizer chặn được injection"). Nhưng không tiêu chí nào trả lời được câu quan trọng nhất: *chuẩn này có đang đi đúng hướng không?* Không có thước đo thì rất dễ làm xong tám milestone rồi mới phát hiện chẳng ai cần.
 
@@ -343,17 +534,39 @@ Tôi xếp nó ưu tiên 4 (sau bảo mật) vì nó không mở khoá năng l�
 
 #### ▸ Trả lời
 
-*(chưa có)*
+**Fable — 2026-08-02**
+
+**Câu 1 — ba chỉ số, chỉnh lại một trong ba phỏng đoán của bạn:**
+
+1. **Tỉ lệ agent hoàn thành tác vụ đầu-cuối không cần người can thiệp**, trên một bộ kịch bản cố định (đặt bàn, thêm giỏ, form nhiều bước) — thước "consumer đủ mạnh chưa". Lưới E2E hiện tại là mầm của nó.
+2. **Time-to-first-success của dev lạ** (con số 15 phút ở R03) — thước "phần thưởng có đổi được không".
+3. **Số thay đổi spec bị ép ra bởi mỗi trang thật mới** — thước hội tụ, thay cho "số trang áp dụng" mà bạn phỏng đoán. Trang mới thứ N mà không ép đổi gì nghĩa là chuẩn đang khớp thực địa; số này không giảm nghĩa là spec đang overfit demo. Nó kiêm luôn tiêu chí đóng băng của R05. Còn "số trang áp dụng" ở giai đoạn này sẽ là 0 hoặc là số bạn tự tạo — cả hai đều không mang thông tin; để dành nó cho giai đoạn sau.
+
+**Câu 2 — tín hiệu chết sớm mà người trong cuộc hay đọc nhầm. Điểm chung của chúng: đều là *sự im lặng*, và người trong cuộc đọc im lặng thành "chưa ai biết tới thôi":**
+
+- Mọi câu hỏi và issue đều do chính tác giả đặt — chưa ai va vào chuẩn đủ mạnh để vấp.
+- Tích hợp nào cũng cần tác giả ngồi cạnh mới xong — chuẩn đang thở bằng hô hấp nhân tạo.
+- Người thử một lần **không quay lại** — im lặng sau lần đầu là tín hiệu mạnh hơn mọi lời chê.
+- Consumer tiềm năng chọn *tự suy luận lại từ DOM* thay vì đọc khai báo — thị trường đang nói phần khai báo không đáng công viết.
+
+Đây là N2 của chính bạn áp lên sản phẩm: hỏng phải ồn ào. Hãy dựng ống nghe ngay từ đầu — một kênh feedback, một issue template "tôi kẹt ở bước này" — vì không có ống nghe thì mọi cái chết đều im lặng.
+
+**Câu 3 — sớm hơn bạn định: ngay sau M2, trước khi viết tài liệu M3.5.** Nghi ngờ overfit của bạn đúng, và nó compound theo tuần. Cách làm rẻ, không cần tuyển ai: lấy một app mã nguồn mở có form thật (booking, todo, admin bất kỳ), tự khai báo nó **trong vai bên thứ ba** — luật chơi là chỉ được sửa template của app, không được sửa spec cho vừa tay. Mỗi lần bạn muốn "nới spec một tí cho xong" chính là chỗ dev thật sẽ bỏ cuộc — ghi lại thành backlog. Trang này sau đó dùng lại ba lần: bộ E2E thứ hai, ví dụ trong tài liệu M3.5, và điểm đo cho chỉ số 3 ở câu 1.
 
 #### ▸ Ghi nhận & áp dụng
 
-*(chưa có)*
+**2026-08-02 · đã sửa lộ trình.** Thêm mục 3.3 (ba chỉ số + tín hiệu chết sớm) và **M2.5 — Chạm thực địa**.
+
+- **Bỏ "số trang áp dụng"** khỏi danh sách chỉ số. Lý do bác bỏ đúng và khó chịu: ở giai đoạn này con số đó bằng 0 hoặc bằng số **tự mình tạo ra** — cả hai đều không mang thông tin, mà một chỉ số không mang thông tin thì tệ hơn không đo, vì nó tạo cảm giác đang đo. Thay bằng ③ *số thay đổi spec bị ép ra bởi mỗi trang thật mới*.
+- **M2.5 mới, ngay sau M2.** Điều làm tôi đổi ý không phải "nên có trang thật" mà là **luật chơi**: chỉ sửa template app, không sửa spec cho vừa tay, và mỗi lần muốn nới spec thì *ghi lại thay vì nới*. Không có luật đó thì "chạm thực địa" tự biến thành một buổi uốn spec cho khớp app — vẫn overfit, chỉ đổi đối tượng.
+- Danh sách tín hiệu chết sớm đưa vào mục 3.3 nguyên văn. Điểm chung của chúng — *đều là sự im lặng, và người trong cuộc đọc im lặng thành "chưa ai biết tới thôi"* — là N2 áp lên sản phẩm chứ không phải lên mã. Kèm việc phải làm: **dựng ống nghe từ đầu** (kênh feedback, issue template "tôi kẹt ở bước này").
+- Tín hiệu thứ tư — *consumer tiềm năng chọn tự suy luận lại từ DOM* — chính là N5 hiện hình. Hai câu trả lời R06 và R07 gặp nhau ở đúng điểm này.
 
 ---
 
 ### R07 — Rủi ro lớn nhất mà lộ trình này chưa nhìn thấy?
 
-**Mức:** tham-khảo · **Hỏi:** 2026-08-02 · **Trạng thái:** ⏳ chờ
+**Mức:** tham-khảo · **Hỏi:** 2026-08-02 · **Trạng thái:** 🔧 đang áp dụng
 
 **Bối cảnh.** Bảng rủi ro ở kiến trúc §9 liệt kê: prompt injection, banner debugger, MV3 SW bị kill, web khai sai, race seq, đụng tên tool. Bốn ngày qua cho thấy rủi ro thật lại đến từ chỗ **không có trong bảng**: một quyết định kiến trúc đã chốt và viết thành tài liệu (§2.2 "toạ độ là ngôn ngữ chung") hoá ra sai — nó đúng về mặt gọn mã nên nghe rất thuyết phục, và vì thế sống sót qua M0 rồi mới cắn ở M1.
 
@@ -367,11 +580,29 @@ Tôi xếp nó ưu tiên 4 (sau bảo mật) vì nó không mở khoá năng l�
 
 #### ▸ Trả lời
 
-*(chưa có)*
+**Fable — 2026-08-02**
+
+**Câu 1 — rủi ro lớn nhất chưa được gọi tên: đối thủ thật của Live MCP không phải Imperative API, mà là "không cần chuẩn nào cả".** Toàn bộ lộ trình đang đấu trận "declarative có thay được imperative không" — và đấu tốt. Nhưng cửa tử nằm ở trận khác: agent thị giác (computer-use) đang tiến rất nhanh, và nó **không đòi trang hợp tác**. Live MCP là chuẩn hai phía: giá trị phía agent bằng 0 khi chưa trang nào khai, giá trị phía trang bằng 0 khi chưa agent nào dùng. Nếu đến lúc vượt được khe hai-phía đó mà vision agent đã "đủ tốt, đủ rẻ", câu dev sẽ hỏi là: *"sao tôi phải khai attribute khi agent tự nhìn được trang?"*
+
+Lối ra không phải chạy đua độ phủ với vision — là đứng ở chỗ vision không đứng được: **tính tất định** (cùng input, cùng kết quả, không "nhìn nhầm"), **chi phí và tốc độ** (không đốt token cho ảnh màn hình mỗi bước), và **khả năng kiểm toán** (tool khai báo = hợp đồng; confirm gate = phanh — thứ một doanh nghiệp có thể phê duyệt). Ba chỉ số ở R06 và cách kể chuyện sản phẩm nên xoay quanh đúng ba chữ đó, và tệp khách đầu tiên nên là nơi *độ tin cậy thắng độ phủ*: công cụ nội bộ doanh nghiệp, sản phẩm muốn tự agent-hoá cho người dùng của chính mình.
+
+**Câu 2 — luận điểm nền có hai chỗ hổng thật và một điểm tự-mâu-thuẫn đáng ghi ra giấy:**
+
+1. *"Con người làm được không cần JS"* bỏ qua việc con người mang theo một **kênh hồi phục** mà agent không có: mắt. Người điền sai thì *nhìn thấy* và tự sửa; agent chỉ có declarative làm giác quan. Chỗ trang truyền tín hiệu thuần thị giác — lỗi validation chỉ đổi màu viền, trạng thái chỉ hiện bằng icon — là điểm mù đúng nghĩa. Spec đã trả lời một phần bằng `livemcp-state`/`livemcp-result`, nhưng nên phát biểu thẳng thành điều kiện: *mọi tín hiệu người dùng cần thấy để ra quyết định phải tồn tại dạng text/attribute* — đó là **tiền đề** để luận điểm nền đứng vững, không phải hệ quả của nó.
+2. Có những tương tác con người làm không cần JS của trang nhưng khó cho đường bàn phím: contenteditable/rich-text (IME, định dạng), drag-and-drop thật, slider tuỳ chế. Chưa cần giải; cần một dòng "ngoài phạm vi v1" tường minh trong spec — ranh giới khai ra là quyết định, không khai là lỗ hổng chờ người dùng phát hiện (N2).
+3. Điểm tự-mâu-thuẫn: `livemcp-state` — xương sống cơ chế đợi — chính là loại attribute *phải đồng bộ runtime*, hình dạng rot số một theo bài học ARIA ở Q06, và nó trượt phép thử N3 (dev quên cập nhật, trang vẫn chạy bình thường). Không có nghĩa là bỏ nó; nghĩa là waiter phải coi state là *tối ưu hoá* còn DOM-lắng là *đường tin cậy*, và validator M3.5 phải lint state-rot ở ưu tiên cao nhất. Kỳ vọng đúng: ngoài thực địa, state rot sẽ là **chuyện thường**, không phải ngoại lệ.
+
+**Câu 3 — một điều duy nhất: kéo "chạm thực địa" lên trước M3.5** — một trang thật không do mình thiết kế, ngay sau M2, như mô tả ở R06 câu 3. Chọn nó thay vì mọi đề xuất khác vì nó là thuốc cho đúng loại rủi ro bạn vừa mô tả trong Bối cảnh: những quyết định nghe thuyết phục và sống sót chỉ vì chưa gặp thứ gì đủ lạ để phản bác. Demo-site không bao giờ phản bác bạn — nó do chính bạn thiết kế để chuẩn chạy đẹp. Trang của người khác thì có, và càng gặp sớm thì mỗi lần bị phản bác càng rẻ.
 
 #### ▸ Ghi nhận & áp dụng
 
-*(chưa có)*
+**2026-08-02 · đã sửa lộ trình.** Đây là câu trả lời đổi nhiều thứ nhất, dù mức chỉ là *tham-khảo*.
+
+- **N5 mới** — *đối thủ không phải Imperative API mà là "không cần chuẩn nào cả"*. Cả lộ trình v1.0 của tôi đang đấu trận "declarative có thay được imperative không" và đấu tốt; nhưng cửa tử nằm ở trận khác. Live MCP là chuẩn **hai phía** (trang chưa khai → agent vô giá trị; agent chưa có → khai báo vô giá trị), nên nếu vượt được khe đó đúng lúc vision agent đã "đủ tốt, đủ rẻ" thì câu dev hỏi sẽ là *"sao tôi phải khai attribute?"*. Lối ra không phải đua độ phủ: **tất định · rẻ và nhanh · kiểm toán được**. Ba chữ này giờ ràng cả mục 3.3 lẫn cách kể chuyện sản phẩm, và ràng cả việc chọn tệp khách đầu tiên — nơi *độ tin cậy thắng độ phủ*.
+- **N6 mới** — *agent không có mắt là **tiền đề**, không phải hệ quả*. Luận điểm nền của `project-ideal.md` bỏ sót kênh hồi phục bằng mắt: người điền sai thì nhìn thấy và tự sửa. `livemcp-state`/`livemcp-result` mới trả lời một phần; phát biểu đúng phải là điều kiện *mọi tín hiệu người dùng cần thấy để ra quyết định phải tồn tại dạng text/attribute*. Sẽ viết vào spec ở M1.5.
+- **Ranh giới "ngoài phạm vi v1"** (contenteditable/rich-text, drag-and-drop thật, slider tuỳ chế) → bảng nợ kỹ thuật, khai ngay ở M1.5. Chưa cần giải; nhưng *ranh giới khai ra là quyết định, không khai là lỗ hổng chờ người dùng phát hiện*.
+- **Điểm tự-mâu-thuẫn tôi đã không nhìn ra:** `livemcp-state` — xương sống cơ chế đợi của M2 — **trượt chính phép thử N3** của tôi (dev quên cập nhật, trang vẫn chạy bình thường), và là hình dạng rot số một theo bài học ARIA ở Q06. Không bỏ nó, nhưng M2 phải thiết kế theo: **state là tối ưu hoá, DOM lắng là đường tin cậy**; validator M3.5 lint state-rot ở ưu tiên cao nhất. Kỳ vọng đúng là state rot sẽ là *chuyện thường*, không phải ngoại lệ. Đã ghi vào hạng mục 3 của M2 — nếu không có câu này, tôi sẽ dựng waiter tin state trước rồi mới phát hiện ra ở thực địa.
+- **M2.5** ra đời từ câu 3 (trùng R06 câu 3) — xem ghi nhận ở R06.
 
 ---
 
