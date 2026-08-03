@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <meta name="livemcp" content="0">
+  <meta name="livemcp-app" content="DynamicDemo">
+  <meta name="livemcp-description"
+        content="Demo DOM động: menu danh mục chỉ tồn tại sau khi mở, mỗi mục là một tool riêng sinh ra tại chỗ.">
+
+  <title>DynamicDemo — Demo M2</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <header>
+    <h1>🌀 DynamicDemo</h1>
+    <p class="sub">Demo <strong>luận điểm trung tâm</strong> của chuẩn Live MCP:
+       DOM mới sinh ra từ tương tác, và agent chỉ cần
+       <strong>hành động → đợi → đọc declarative mới → hành động tiếp</strong>.
+       Không tool nào ở đây được biết trước.</p>
+    <p class="hint"><a href="./index.html">← Về trang demo M0</a> ·
+       <a href="./booking.html">Form M1 →</a></p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Menu danh mục — tool sinh ra tại chỗ</h2>
+
+      <button id="open-menu"
+              livemcp-name="mo_danh_muc"
+              livemcp-action="click"
+              livemcp-description="Mở menu danh mục món. Sau khi mở, mỗi danh mục sẽ thành một tool riêng có tên chon_*."
+              livemcp-wait="#menu[livemcp-state='ready']"
+              livemcp-wait-timeout="4000">Mở danh mục</button>
+
+      <!--
+        Vùng menu bắt đầu RỖNG. Các mục (và các tool kèm theo) chỉ tồn tại sau
+        khi người dùng — hoặc agent — bấm nút trên. Đây chính là ca mà một
+        snapshot chụp lúc load trang không bao giờ nhìn thấy.
+      -->
+      <div id="menu" livemcp-state="idle" class="menu" hidden></div>
+
+      <div id="chosen" livemcp-state="idle">Chưa chọn danh mục nào.</div>
+    </section>
+
+    <section class="card">
+      <h2>Nút có <code>livemcp-state</code> hỏng — <em>cố ý</em></h2>
+      <p class="hint">Nút này đặt vùng kết quả về <code>busy</code> rồi
+         <strong>không bao giờ</strong> đổi lại, đúng kiểu dev quên cập nhật state.
+         Agent vẫn phải xong việc, không được treo tới hết giờ: waiter coi
+         <code>livemcp-state</code> là tối ưu hoá, còn DOM lắng mới là đường tin cậy.</p>
+
+      <button id="rotten"
+              livemcp-name="nut_state_muc"
+              livemcp-action="click"
+              livemcp-description="Cập nhật ô kết quả nhưng cố tình để livemcp-state kẹt ở busy."
+              livemcp-result="#rotten-result"
+              livemcp-wait-timeout="8000">Chạy việc có state mục</button>
+
+      <div id="rotten-result" livemcp-state="idle">Chưa chạy.</div>
+    </section>
+  </main>
+
+  <script src="./dynamic.js"></script>
+</body>
+</html>

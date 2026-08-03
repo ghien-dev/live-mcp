@@ -6,7 +6,8 @@ import {
 } from '@livemcp/protocol';
 import type { ActionStep, AfterActionReply, ContentToSw, PlanReply, SwToContent } from '../messages.js';
 import { readPageInfo, scan, type ScanResult } from './scanner.js';
-import { diffTools, isEmptyDiff, resourcesDiffer } from './delta.js';
+import { diffTools, isEmptyDiff, resourcesDiffer, type ToolDiff } from './delta.js';
+import { evaluateWait, explainWait, type WaitOutcome, type WaitSignals } from './waiter.js';
 import {
   buildProbePlan,
   DATE_LIKE,
@@ -117,18 +118,21 @@ if (page) {
 
   let deltaTimer: number | null = null;
 
-  const emitDelta = () => {
-    deltaTimer = null;
-
-    // Đang thi hành một hành động thì đừng báo giữa chừng: form đang được điền
-    // dở, tool list lúc đó chưa phải trạng thái nào có thật với agent. Hành động
-    // xong sẽ có một lượt quét khác.
-    if (pending) return;
-
+  /**
+   * Quét lại, cập nhật `current`, và báo server NẾU tool list thật sự đổi.
+   *
+   * Dùng chung cho hai đường: observer (trang tự đổi) và cuối mỗi hành động
+   * (agent làm trang đổi). Phải chung một cửa, vì nếu `afterAction` tự quét rồi
+   * gán `current` mà không báo, thì lượt observer kế tiếp sẽ so với bản MỚI và
+   * thấy delta rỗng — server không bao giờ biết có tool mới. Đó đúng là kiểu
+   * hỏng im lặng mà N2 cấm.
+   */
+  const publishDelta = (): ToolDiff => {
     const next = scan();
 
     // Resource đổi thì phát nguyên snapshot — `declarative_delta` chỉ chở tool.
     if (resourcesDiffer(current.resources, next.resources)) {
+      const diff = diffTools(current.tools, next.tools);
       current = next;
       seq += 1;
       send({
@@ -143,7 +147,7 @@ if (page) {
         tools: current.tools,
         resources: current.resources,
       });
-      return;
+      return diff;
     }
 
     const diff = diffTools(current.tools, next.tools);
@@ -151,10 +155,22 @@ if (page) {
     // Điểm mấu chốt: đổi DOM KHÔNG có nghĩa là đổi tool list. Cập nhật registry
     // (element ref có thể đã bị thay) nhưng im lặng với server.
     current = next;
-    if (isEmptyDiff(diff)) return;
+    if (isEmptyDiff(diff)) return diff;
 
     seq += 1;
     send({ type: 'cs_declarative_delta', seq, ...diff });
+    return diff;
+  };
+
+  const emitDelta = () => {
+    deltaTimer = null;
+
+    // Đang thi hành một hành động thì đừng báo giữa chừng: form đang được điền
+    // dở, tool list lúc đó chưa phải trạng thái nào có thật với agent. Cuối
+    // hành động sẽ có một lượt `publishDelta` riêng.
+    if (pending) return;
+
+    publishDelta();
   };
 
   const observer = new MutationObserver((records) => {
@@ -333,10 +349,17 @@ if (page) {
       }
     }
 
-    const timedOut = decl ? await waitForSettle(decl) : (await sleep(200), false);
+    const outcome: WaitOutcome = decl
+      ? await waitForSettle(decl)
+      : { done: true, reason: 'dom-quiet', timedOut: false };
 
     const mismatched = pending?.tool === tool ? verify(pending.current) : [];
     pending = null;
+
+    // Trang đã phản ứng xong → quét lại và BÁO NGAY. Đây là mảnh khép vòng
+    // "hành động → đợi → declarative mới → hành động tiếp": agent thấy hệ quả
+    // của chính mình trong cùng một lượt trả về, không phải hỏi lại.
+    const diff = publishDelta();
 
     const lines: string[] = [];
 
@@ -364,14 +387,14 @@ if (page) {
       );
     }
 
-    const stateEl = decl?.resultSelector ? document.querySelector(decl.resultSelector) : null;
+    const timeoutMs = decl?.waitTimeout ?? DEFAULT_WAIT_TIMEOUT_MS;
     return {
-      status: timedOut ? 'timeout' : 'ok',
+      status: outcome.timedOut ? 'timeout' : 'ok',
       resultText: lines.length ? lines.join('\n') : undefined,
-      stateSnapshot: stateEl?.getAttribute('livemcp-state') ?? undefined,
-      error: timedOut
-        ? `Quá ${decl?.waitTimeout ?? DEFAULT_WAIT_TIMEOUT_MS}ms mà điều kiện đợi chưa thoả.`
-        : undefined,
+      stateSnapshot: decl ? (stateOf(decl) ?? undefined) : undefined,
+      newTools: diff.added.length ? diff.added.map((t) => t.name) : undefined,
+      goneTools: diff.removed.length ? [...diff.removed] : undefined,
+      error: explainWait(outcome, timeoutMs),
     };
   }
 
@@ -515,57 +538,88 @@ if (page) {
   }
 
   /**
-   * Đợi trang ổn định sau hành động. Bản tối giản của spec §7.2 — polling
-   * `livemcp-wait` / `livemcp-wait-gone`; M2 sẽ thay bằng MutationObserver để
-   * bắt cả tool mới sinh ra và xử lý ưu tiên `livemcp-state`.
+   * Vùng mang `livemcp-state` liên quan tới hành động này.
    *
-   * @returns true nếu hết thời gian mà điều kiện chưa thoả.
+   * Tìm theo thứ tự hẹp → rộng: vùng kết quả, vùng đợi, rồi bất kỳ vùng nào
+   * trên trang. Cố ý KHÔNG bịa ra một "vùng mặc định": nếu trang có nhiều vùng
+   * state mà tool không chỉ rõ vùng nào thì lấy vùng đầu tiên là đoán bừa —
+   * thà không có tín hiệu còn hơn có tín hiệu sai.
    */
-  /** Điều kiện đợi của tool đã thoả chưa (trang đã phản ứng chưa)? */
-  function waitSatisfied(decl: ToolDecl): boolean {
-    if (decl.wait && document.querySelector(decl.wait)) return true;
-    if (decl.waitGone && !document.querySelector(decl.waitGone)) return true;
-    return false;
+  function stateOf(decl: ToolDecl): string | null {
+    const selectors = [decl.resultSelector, decl.wait].filter(Boolean) as string[];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      const state =
+        el?.getAttribute('livemcp-state') ?? el?.closest('[livemcp-state]')?.getAttribute('livemcp-state');
+      if (state) return state;
+    }
+    const all = document.querySelectorAll('[livemcp-state]');
+    return all.length === 1 ? all[0]!.getAttribute('livemcp-state') : null;
   }
 
-  async function waitForSettle(decl: ToolDecl): Promise<boolean> {
-    if (!decl.wait && !decl.waitGone) {
-      await sleep(200); // không khai báo wait → đợi DOM lắng một nhịp ngắn
-      return false;
-    }
+  /**
+   * Đợi trang phản ứng xong sau hành động (spec §7.2).
+   *
+   * Toàn bộ phần quyết định nằm ở `evaluateWait` — ở đây chỉ thu tín hiệu.
+   * Nghe DOM thay vì polling: tab ẩn làm `setTimeout` bị kẹp về 1s (sau 5 phút
+   * là 1 phút), trong khi MutationObserver vẫn nổ ngay khi trang đổi. Timer chỉ
+   * còn làm lưới chốt hạn.
+   */
+  function waitForSettle(decl: ToolDecl): Promise<WaitOutcome> {
+    const timeoutMs = decl.waitTimeout ?? DEFAULT_WAIT_TIMEOUT_MS;
+    const started = Date.now();
+    let lastMutation = started;
 
-    const satisfied = () => waitSatisfied(decl);
+    const signals = (): WaitSignals => ({
+      waitSelectorPresent: decl.wait ? document.querySelector(decl.wait) !== null : null,
+      waitGonePresent: decl.waitGone ? document.querySelector(decl.waitGone) !== null : null,
+      state: stateOf(decl),
+      quietMs: Date.now() - lastMutation,
+      elapsedMs: Date.now() - started,
+      timeoutMs,
+    });
 
-    if (satisfied()) return false;
+    return new Promise<WaitOutcome>((resolve) => {
+      let finished = false;
 
-    // Nghe DOM thay vì polling bằng setTimeout: tab ẩn / cửa sổ bị che làm
-    // timer bị kẹp về 1s (sau 5 phút là 1 phút), trong khi MutationObserver
-    // vẫn nổ ngay khi trang đổi `livemcp-state`. Timer chỉ còn làm lưới chốt hạn.
-    return new Promise<boolean>((resolve) => {
-      const deadline = Date.now() + (decl.waitTimeout ?? DEFAULT_WAIT_TIMEOUT_MS);
-      let done = false;
-
-      const finish = (timedOut: boolean) => {
-        if (done) return;
-        done = true;
-        observer.disconnect();
+      const finish = (outcome: WaitOutcome) => {
+        if (finished) return;
+        finished = true;
+        watcher.disconnect();
         clearInterval(ticker);
-        resolve(timedOut);
+        if (outcome.staleState) {
+          // Hỏng ồn ào (N2): nếu im lặng, dev sẽ không bao giờ biết
+          // `livemcp-state` của mình đã mục — mà đây là lỗi vô hình với chính
+          // người viết, y hệt ARIA hỏng khi không ai chạy screen reader.
+          console.warn(
+            `[Live MCP] tool "${decl.name}": điều kiện đợi đã thoả và DOM đã lắng, ` +
+              'nhưng livemcp-state vẫn là "busy". Trang có quên cập nhật state không? ' +
+              'Đi tiếp theo tín hiệu DOM.',
+          );
+        }
+        resolve(outcome);
       };
 
       const check = () => {
-        if (satisfied()) finish(false);
-        else if (Date.now() >= deadline) finish(true);
+        const outcome = evaluateWait(signals());
+        if (outcome) finish(outcome);
       };
 
-      const observer = new MutationObserver(check);
-      observer.observe(document.documentElement, {
+      const watcher = new MutationObserver(() => {
+        lastMutation = Date.now();
+        check();
+      });
+      watcher.observe(document.documentElement, {
         subtree: true,
         childList: true,
         attributes: true,
         characterData: true,
       });
-      const ticker = setInterval(check, 250);
+
+      // Nhịp đủ mau để phát hiện "DOM đã lắng" đúng lúc: chính sự VẮNG MẶT của
+      // mutation mới là tín hiệu, mà vắng mặt thì observer không bao giờ báo.
+      const ticker = setInterval(check, 80);
+      check();
     });
   }
 }

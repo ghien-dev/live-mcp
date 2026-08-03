@@ -10,10 +10,13 @@ bằng chuột và bàn phím thật (trusted events qua CDP), không gọi Java
 
 ## Trạng thái
 
-**M0 ✅ · M1 ✅ · M1.5 ✅** — toàn tuyến `agent → MCP → server → WebSocket → extension → CDP → DOM`
+**M0 ✅ · M1 ✅ · M1.5 ✅ · M2 🔧** — toàn tuyến `agent → MCP → server → WebSocket → extension → CDP → DOM`
 đã thông; form điền được đủ loại ô bằng bàn phím thật, mọi sự kiện `isTrusted: true`.
-Có lưới E2E chạy trên Chrome thật (23 bài, ba locale). Hub đã có token pairing +
-chặn origin web, và mọi text từ trang tới agent đi qua đúng một cửa.
+Hub có token pairing + chặn origin web, và mọi text từ trang tới agent đi qua đúng một cửa.
+
+**Luận điểm trung tâm đã chứng minh được:** agent gọi một tool → đợi → **nhận tool mới
+sinh ra từ DOM mới** → gọi tiếp, không cần biết trước gì về chúng. Xem
+`packages/demo-site/dynamic.html`. Lưới E2E: 27 bài trên Chrome thật, ba locale.
 
 Milestone tiếp theo và thứ tự ưu tiên: [`docs/livemcp-roadmap.md`](docs/livemcp-roadmap.md).
 
@@ -22,7 +25,7 @@ Milestone tiếp theo và thứ tự ưu tiên: [`docs/livemcp-roadmap.md`](docs
 | `packages/protocol` | Hợp đồng trung tâm: `ToolDecl` + message WebSocket (server ↔ extension dùng chung) |
 | `packages/server` | Local Server: MCP stdio, WS hub `127.0.0.1:8787`, registry tool động |
 | `packages/extension` | Chrome MV3: content script quét declarative, service worker thi hành qua CDP |
-| `packages/demo-site` | Trang demo đạt chuẩn, kiêm test bed |
+| `packages/demo-site` | Trang demo đạt chuẩn, kiêm test bed — `index` (M0), `booking` (form M1), `dynamic` (DOM động M2) |
 
 ## Chạy thử
 

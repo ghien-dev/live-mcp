@@ -93,5 +93,8 @@ export interface AfterActionReply {
   steps?: ActionStep[];
   resultText?: string;
   stateSnapshot?: string;
+  /** Tool sinh ra do CHÍNH hành động này — agent thấy hệ quả ngay trong một lượt. */
+  newTools?: string[];
+  goneTools?: string[];
   error?: string;
 }

@@ -102,11 +102,11 @@ Chủ dự án viết trong [`project-ideal.md`](project-ideal.md): *"DOM mới 
 
 **Việc cụ thể**
 
-1. `MutationObserver` trong content script, lọc đúng theo declarative và debounce (kiến trúc §5.2) → `declarative_delta`.
-2. Server phát `notifications/tools/list_changed` khi tool list đổi; xử lý `seq` chống race giữa delta và snapshot mới sau navigation (§6.2).
-3. Waiter thật theo spec §7.2: `livemcp-state` → `livemcp-wait`/`wait-gone` → DOM lắng → timeout. Thay bản tối giản hiện tại. **Ràng buộc mới từ [R07] câu 2:** `livemcp-state` trượt phép thử N3 (dev quên cập nhật, trang vẫn chạy bình thường) nên waiter phải coi state là **tối ưu hoá**, còn **DOM lắng là đường tin cậy** — không bao giờ để state-rot treo agent vĩnh viễn.
-4. Tool hệ thống `livemcp_wait(site, selector?, timeoutMs)` — cho agent chủ động đợi (§6.4).
-5. Trang demo: dropdown động (mẫu spec §5.2).
+1. ✅ `MutationObserver` trong content script, lọc đúng theo declarative và debounce (kiến trúc §5.2) → `declarative_delta`.
+2. ✅ Server phát `notifications/tools/list_changed` khi tool list đổi *(đã có từ M0)*; ⬜ xử lý `seq` chống race giữa delta và snapshot mới sau navigation (§6.2) — chưa có ca kiểm.
+3. ✅ Waiter thật theo spec §7.2: `livemcp-state` → `livemcp-wait`/`wait-gone` → DOM lắng → timeout. **Ràng buộc từ [R07] câu 2 đã hiện thực:** state là **tối ưu hoá**, DOM lắng là **đường tin cậy**; `state="busy"` kẹt trong khi DOM đã lắng ≥2s thì đi tiếp và **cảnh báo to** thay vì đợi hết giờ.
+4. ⬜ Tool hệ thống `livemcp_wait(site, selector?, timeoutMs)` — cho agent chủ động đợi (§6.4).
+5. ✅ Trang demo: `dynamic.html` — menu danh mục sinh tool tại chỗ, kèm một nút **cố ý để state mục** làm ca kiểm cho ràng buộc trên.
 6. **Shadow DOM** — *hạng mục cuối, có quyền rơi* (xem [R01] và phần nghiệm thu). Scanner đệ quy vào `shadowRoot`; observer gắn cho **từng** shadow root. Bốn cạm bẫy đã biết trước:
    - **Không có sự kiện nào báo `attachShadow`** — node có thể vào DOM trước rồi mới gắn shadow root. Ứng phó: mỗi lần xử lý node trong delta thì kiểm lại `el.shadowRoot`, chấp nhận trễ một nhịp mutation. **Không** monkey-patch `Element.prototype.attachShadow` — đường đó tiêm code vào trang, phá chính ranh giới content script.
    - **Map host → observer là chỗ rò rỉ bộ nhớ kinh điển** — disconnect khi host rời DOM, và kiểm bằng `isConnected` trong nhịp rescan chứ đừng tin removal event luôn đến đủ.
@@ -115,7 +115,7 @@ Chủ dự án viết trong [`project-ideal.md`](project-ideal.md): *"DOM mới 
 
 **Nghiệm thu — hai bậc** *(theo [R01])*
 
-- **Bậc 1, bắt buộc** *(chính là luận điểm trung tâm)*: agent gọi tool mở dropdown → đợi → **nhận được tool mới** sinh từ DOM mới → gọi tiếp → hoàn tất, không cần biết trước gì về dropdown đó. E2E: tool xuất hiện/biến mất đúng theo DOM, không phụ thuộc `sleep`.
+- **Bậc 1, bắt buộc** *(chính là luận điểm trung tâm)* — ✅ **đã đạt 2026-08-03**: agent gọi tool mở dropdown → đợi → **nhận được tool mới** sinh từ DOM mới → gọi tiếp → hoàn tất, không cần biết trước gì về dropdown đó. Bốn ca E2E ở `packages/e2e/tests/06-dynamic.spec.ts`, gồm cả ca `livemcp-state` mục không được treo agent. Còn nợ hạng mục 4 (`livemcp_wait`) và `seq` race.
 - **Bậc 2, cố gắng**: form trong shadow DOM chạy được (gỡ `fixme` ở `packages/e2e/tests/05-gaps.spec.ts`) + demo form dựng bằng web component. **Nếu M2 kéo dài thì bậc 2 rơi xuống làm cùng M3** — đã thoả thuận trước nên không ai phải áy náy, và không milestone mới nào phải sinh ra.
 
 **Rủi ro** — Observer bắn quá nhiều (trang React re-render liên tục) → bão `list_changed` làm ngộp agent. Ứng phó: debounce + so sánh nội dung, chỉ báo khi *tool list* đổi thật chứ không phải DOM đổi. Đây cũng là chỗ N2 cần được thiết kế vào từ đầu: delta sai thì hỏng im lặng.

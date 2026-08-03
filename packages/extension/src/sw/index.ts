@@ -312,6 +312,8 @@ async function executeAction(
           status: after.status,
           resultText: after.resultText,
           stateSnapshot: after.stateSnapshot,
+          newTools: after.newTools,
+          goneTools: after.goneTools,
           error: after.error,
         });
         return;

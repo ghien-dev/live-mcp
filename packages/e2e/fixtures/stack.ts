@@ -47,7 +47,7 @@ export interface UiLocaleOptions {
 }
 
 export const test = base.extend<
-  { booking: Page; edgeCases: Page },
+  { booking: Page; edgeCases: Page; dynamic: Page },
   UiLocaleOptions & { stack: Stack }
 >({
   uiLocale: ['en-US', { option: true, scope: 'worker' }],
@@ -111,12 +111,23 @@ export const test = base.extend<
   edgeCases: async ({ stack }, use, testInfo) => {
     await usePage(stack, 'edge-cases.html', CLICK_BURIED, use, testInfo);
   },
+
+  dynamic: async ({ stack }, use, testInfo) => {
+    await usePage(stack, 'dynamic.html', OPEN_MENU, use, testInfo);
+  },
 });
 
 export const BOOK_TABLE = 'bookmytable__book_table';
 export const CLICK_BURIED = 'edgecases__click_buried';
 export const CLICK_REACHABLE = 'edgecases__click_reachable';
 export const PICK_CITY = 'edgecases__pick_city';
+
+/** DynamicDemo (M2) — tool duy nhất tồn tại lúc trang vừa load. */
+export const OPEN_MENU = 'dynamicdemo__mo_danh_muc';
+/** Ba tool này KHÔNG tồn tại cho tới khi menu được mở. */
+export const PICK_MAIN = 'dynamicdemo__chon_mon_chinh';
+export const PICK_DRINK = 'dynamicdemo__chon_do_uong';
+export const ROTTEN_STATE = 'dynamicdemo__nut_state_muc';
 
 /**
  * Mở một trang, đợi extension phát hiện, rồi **đóng lại sau bài test**.

@@ -108,3 +108,29 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 }
 
 #booking-result { white-space: pre-wrap; }
+
+/* --- DynamicDemo (M2) ---------------------------------------------------- */
+
+.menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: .9rem 0;
+  padding: .8rem;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+
+.menu-item { background: var(--bg); color: var(--fg); border: 1px solid var(--line); }
+
+#chosen, #rotten-result {
+  margin-top: .9rem;
+  padding: .7rem .9rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+/* Trạng thái hiện ra bằng mắt được — nhưng đó là phần THÊM. Tín hiệu thật cho
+   agent nằm ở attribute livemcp-state, không nằm ở màu sắc (spec §1.1.1). */
+[livemcp-state="busy"] { border-color: var(--accent); }
+[livemcp-state="error"] { border-color: #d1453b; }

@@ -137,6 +137,11 @@ export class McpAgent {
     return res.tools ?? [];
   }
 
+  /** Chỉ tên tool — dạng dùng nhiều nhất khi assert "có / không có". */
+  async toolNames(): Promise<string[]> {
+    return (await this.listTools()).map((t) => t.name);
+  }
+
   async callTool(name: string, args: Record<string, unknown>): Promise<{ text: string; isError: boolean }> {
     const res = (await this.send('tools/call', { name, arguments: args })) as {
       content?: Array<{ type: string; text?: string }>;
