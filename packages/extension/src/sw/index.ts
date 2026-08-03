@@ -89,6 +89,20 @@ chrome.runtime.onMessage.addListener((msg: ContentToSw, sender) => {
     return;
   }
 
+  if (msg.type === 'cs_declarative_delta') {
+    // SW chỉ chuyển tiếp: nó không biết gì về attribute `livemcp-*`, và việc
+    // quyết định "có đáng báo không" đã xong ở content script (§1 bảng phân vai).
+    link.send({
+      type: 'declarative_delta',
+      tabId,
+      seq: msg.seq,
+      added: msg.added,
+      removed: msg.removed,
+      changed: msg.changed,
+    });
+    return;
+  }
+
   if (msg.type === 'cs_site_gone') {
     forgetTab(tabId);
   }

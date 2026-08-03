@@ -41,6 +41,18 @@ export type ContentToSw =
       tools: ToolDecl[];
       resources: ResourceDecl[];
     }
+  /**
+   * DOM đổi làm TOOL LIST đổi (M2). Content script chỉ gửi khi danh sách thật
+   * sự khác — DOM đổi mà tool list y nguyên thì im lặng, nếu không agent sẽ
+   * nhận bão `list_changed` từ mọi trang React.
+   */
+  | {
+      type: 'cs_declarative_delta';
+      seq: number;
+      added: ToolDecl[];
+      removed: string[];
+      changed: ToolDecl[];
+    }
   | { type: 'cs_site_gone' };
 
 export type SwToContent =

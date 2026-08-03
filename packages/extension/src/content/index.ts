@@ -6,6 +6,7 @@ import {
 } from '@livemcp/protocol';
 import type { ActionStep, AfterActionReply, ContentToSw, PlanReply, SwToContent } from '../messages.js';
 import { readPageInfo, scan, type ScanResult } from './scanner.js';
+import { diffTools, isEmptyDiff, resourcesDiffer } from './delta.js';
 import {
   buildProbePlan,
   DATE_LIKE,
@@ -30,6 +31,7 @@ import {
   MARKER_B,
   nextCandidate,
   probeInput,
+  PROBE_HOST_ID,
   rememberOrder,
   removeProbe,
   sameOrder,
@@ -102,7 +104,81 @@ if (page) {
 
   window.addEventListener('pagehide', () => send({ type: 'cs_site_gone' }), { once: true });
 
-  // TODO(M2): MutationObserver → declarative_delta + cơ chế đợi livemcp-wait.
+  // -------------------------------------------------------------------------
+  // M2 — DOM động: MutationObserver → declarative_delta
+  // -------------------------------------------------------------------------
+
+  /**
+   * Gộp một chùm mutation thành một lần quét. Trang React re-render sinh hàng
+   * trăm mutation trong vài ms; không gộp thì quét cháy CPU và agent nhận bão
+   * `list_changed`.
+   */
+  const DELTA_DEBOUNCE_MS = 150;
+
+  let deltaTimer: number | null = null;
+
+  const emitDelta = () => {
+    deltaTimer = null;
+
+    // Đang thi hành một hành động thì đừng báo giữa chừng: form đang được điền
+    // dở, tool list lúc đó chưa phải trạng thái nào có thật với agent. Hành động
+    // xong sẽ có một lượt quét khác.
+    if (pending) return;
+
+    const next = scan();
+
+    // Resource đổi thì phát nguyên snapshot — `declarative_delta` chỉ chở tool.
+    if (resourcesDiffer(current.resources, next.resources)) {
+      current = next;
+      seq += 1;
+      send({
+        type: 'cs_site_ready',
+        site: {
+          url: location.href,
+          app: page.app,
+          description: page.description,
+          specVersion: page.specVersion,
+        },
+        seq,
+        tools: current.tools,
+        resources: current.resources,
+      });
+      return;
+    }
+
+    const diff = diffTools(current.tools, next.tools);
+
+    // Điểm mấu chốt: đổi DOM KHÔNG có nghĩa là đổi tool list. Cập nhật registry
+    // (element ref có thể đã bị thay) nhưng im lặng với server.
+    current = next;
+    if (isEmptyDiff(diff)) return;
+
+    seq += 1;
+    send({ type: 'cs_declarative_delta', seq, ...diff });
+  };
+
+  const observer = new MutationObserver((records) => {
+    // Ô dò locale của chính extension cũng là mutation — bỏ qua để không tự
+    // đánh thức mình (nó nằm trong shadow root của một host ẩn, không mang
+    // attribute livemcp nào nên delta sẽ rỗng, nhưng vẫn tốn một lượt quét).
+    const meaningful = records.some(
+      (r) => !(r.target instanceof Element && r.target.closest(`#${PROBE_HOST_ID}`)),
+    );
+    if (!meaningful) return;
+
+    if (deltaTimer !== null) clearTimeout(deltaTimer);
+    deltaTimer = setTimeout(emitDelta, DELTA_DEBOUNCE_MS) as unknown as number;
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    // KHÔNG dùng attributeFilter: `checkAvailability` gọi `checkVisibility()`,
+    // nên một đổi `class` hay `style` cũng đổi được `available` của tool. Lọc
+    // theo danh sách attribute sẽ bỏ sót đúng nhóm đó — im lặng. Chi phí đổi
+    // lại được debounce + so sánh nội dung gánh.
+    attributes: true,
+  });
 
   chrome.runtime.onMessage.addListener((msg: SwToContent, _sender, sendResponse) => {
     switch (msg.type) {
