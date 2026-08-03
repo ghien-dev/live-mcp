@@ -7,22 +7,22 @@
 
 | | |
 |---|---|
-| Phiên bản | 1.1 — **đã duyệt**, sửa theo R01–R07 |
-| Cập nhật | 2026-08-02 |
+| Phiên bản | 1.2 — sửa theo R01–R07; R08 đang chờ duyệt |
+| Cập nhật | 2026-08-03 |
 | Người đề xuất | Claude · duyệt: Fable |
-| Trạng thái | 🔧 đang thi hành (M1.5) |
+| Trạng thái | ✅ M1.5 · ✅ M2 · ⏭ kế tiếp: **M2.5 chạm thực địa** |
 | Tài liệu nền | [`project-ideal.md`](project-ideal.md) · [`livemcp-architecture.md`](livemcp-architecture.md) §8 · [`livemcp-declarative-spec.md`](livemcp-declarative-spec.md) |
 
 ---
 
 ## 1. Đang ở đâu
 
-**Xong:** M0 (walking skeleton toàn tuyến) · M1 (form + gõ phím thật + schema converter) · lưới E2E trên Chrome thật (ngoài kế hoạch gốc).
+**Xong:** M0 (walking skeleton) · M1 (form + gõ phím thật + schema converter) · lưới E2E trên Chrome thật (ngoài kế hoạch gốc) · M1.5 (vệ sinh bảo mật) · **M2 (đợi + DOM động + shadow DOM)**.
 
 | Tầng bảo vệ | Số lượng | Bắt gì |
 |---|---|---|
-| Unit (vitest) | 31 | logic thuần: schema, định tuyến, thứ tự segment, bảng phím |
-| E2E (Playwright) | 23 + 2 `fixme` | layout, focus thật, CDP thật, ba locale, vòng đời MV3 |
+| Unit (vitest) | 86 | logic thuần: schema, định tuyến, thứ tự segment, bảng phím, cổng handshake, bộ lọc text, diff tool, waiter, race điều hướng |
+| E2E (Playwright) | 30 + 1 `fixme` | layout, focus thật, CDP thật, ba locale, vòng đời MV3, DOM động, shadow DOM |
 | Tự kiểm trong production | 3 lớp | focus xác minh, hit-test, xác minh giá trị từng ô |
 
 **Một quyết định kiến trúc đã bị đảo trong quá trình làm M1:** §2.2 từ *"toạ độ là ngôn ngữ chung của mọi hành động"* thành *"bàn phím là đường mặc định, toạ độ chỉ là ngôn ngữ của hành động chuột"*. Chi tiết và lý do: [`consult/Q01`](consult/Q01-focus-thay-click.md), [`consult/Q04`](consult/Q04-khe-ho-do-toa-do.md).
@@ -94,7 +94,7 @@ Kích thước ghi theo **S / M / L** thay vì ngày. Lý do: bốn ngày qua ch
 
 ---
 
-### M2 — Cơ chế đợi & DOM động · **L** · ưu tiên 1
+### M2 — Cơ chế đợi & DOM động · **L** · ✅ **xong 2026-08-03**
 
 > Đây là milestone **quan trọng nhất còn lại**, vì nó là chỗ chứng minh luận điểm trung tâm của cả dự án.
 
@@ -107,16 +107,16 @@ Chủ dự án viết trong [`project-ideal.md`](project-ideal.md): *"DOM mới 
 3. ✅ Waiter thật theo spec §7.2: `livemcp-state` → `livemcp-wait`/`wait-gone` → DOM lắng → timeout. **Ràng buộc từ [R07] câu 2 đã hiện thực:** state là **tối ưu hoá**, DOM lắng là **đường tin cậy**; `state="busy"` kẹt trong khi DOM đã lắng ≥2s thì đi tiếp và **cảnh báo to** thay vì đợi hết giờ.
 4. ✅ Tool hệ thống `livemcp_wait(tool, gone?, timeoutMs?)` — cho agent chủ động đợi (§6.4). Nghe `store.onChange` chứ không polling, và **server tự đặt trần 60s** thay vì tin tham số agent gửi lên.
 5. ✅ Trang demo: `dynamic.html` — menu danh mục sinh tool tại chỗ, kèm một nút **cố ý để state mục** làm ca kiểm cho ràng buộc trên.
-6. **Shadow DOM** — *hạng mục cuối, có quyền rơi* (xem [R01] và phần nghiệm thu). Scanner đệ quy vào `shadowRoot`; observer gắn cho **từng** shadow root. Bốn cạm bẫy đã biết trước:
+6. ✅ **Shadow DOM** — *hạng mục cuối, có quyền rơi* (xem [R01]), nhưng bậc 1 xong nhanh nên làm luôn. Scanner đệ quy vào `shadowRoot`; observer gắn cho **từng** shadow root; `livemcp-ignore` và `hidden` nay đi xuyên được ranh giới shadow (`closest` thường dừng ở biên, làm vùng khai "bỏ qua" mất hiệu lực đúng chỗ cần nhất). Bốn cạm bẫy đã biết trước:
    - **Không có sự kiện nào báo `attachShadow`** — node có thể vào DOM trước rồi mới gắn shadow root. Ứng phó: mỗi lần xử lý node trong delta thì kiểm lại `el.shadowRoot`, chấp nhận trễ một nhịp mutation. **Không** monkey-patch `Element.prototype.attachShadow` — đường đó tiêm code vào trang, phá chính ranh giới content script.
-   - **Map host → observer là chỗ rò rỉ bộ nhớ kinh điển** — disconnect khi host rời DOM, và kiểm bằng `isConnected` trong nhịp rescan chứ đừng tin removal event luôn đến đủ.
+   - **Map host → observer là chỗ rò rỉ bộ nhớ kinh điển.** *Đã né hẳn thay vì đi qua:* dùng **một** observer, và sau mỗi lần quét thì `disconnect()` rồi gắn lại toàn bộ. Disconnect xoá sạch mọi target cũ kể cả root đã mồ côi — không sổ sách, không `isConnected`, không rò rỉ.
    - **Hiệu năng**: `el.shadowRoot` không query được bằng selector nên phải đi qua từng element. Chỉ đi sâu ở lần quét đầu và trên subtree các node vừa thêm; tuyệt đối không walk cả trang mỗi mutation.
    - **Phần tử *slotted* nằm ở light DOM** — `querySelectorAll` trên document đã thấy nó rồi; đệ quy thêm qua `assignedElements` sẽ đếm trùng.
 
 **Nghiệm thu — hai bậc** *(theo [R01])*
 
 - **Bậc 1, bắt buộc** *(chính là luận điểm trung tâm)* — ✅ **đã đạt 2026-08-03**: agent gọi tool mở dropdown → đợi → **nhận được tool mới** sinh từ DOM mới → gọi tiếp → hoàn tất, không cần biết trước gì về dropdown đó. Bốn ca E2E ở `packages/e2e/tests/06-dynamic.spec.ts`, gồm cả ca `livemcp-state` mục không được treo agent. Còn nợ hạng mục 4 (`livemcp_wait`) và `seq` race.
-- **Bậc 2, cố gắng**: form trong shadow DOM chạy được (gỡ `fixme` ở `packages/e2e/tests/05-gaps.spec.ts`) + demo form dựng bằng web component. **Nếu M2 kéo dài thì bậc 2 rơi xuống làm cùng M3** — đã thoả thuận trước nên không ai phải áy náy, và không milestone mới nào phải sinh ra.
+- **Bậc 2, cố gắng** — ✅ **đã đạt 2026-08-03**: form trong shadow DOM chạy được, `fixme` ở `packages/e2e/tests/05-gaps.spec.ts` đã gỡ. Quyền rơi xuống M3 không cần dùng tới vì bậc 1 xong nhanh hơn dự tính.
 
 **Rủi ro** — Observer bắn quá nhiều (trang React re-render liên tục) → bão `list_changed` làm ngộp agent. Ứng phó: debounce + so sánh nội dung, chỉ báo khi *tool list* đổi thật chứ không phải DOM đổi. Đây cũng là chỗ N2 cần được thiết kế vào từ đầu: delta sai thì hỏng im lặng.
 

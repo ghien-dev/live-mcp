@@ -5,7 +5,7 @@ import {
   type ToolDecl,
 } from '@livemcp/protocol';
 import type { ActionStep, AfterActionReply, ContentToSw, PlanReply, SwToContent } from '../messages.js';
-import { readPageInfo, scan, type ScanResult } from './scanner.js';
+import { readPageInfo, scan, shadowRootsUnder, type ScanResult } from './scanner.js';
 import { diffTools, isEmptyDiff, resourcesDiffer, type ToolDiff } from './delta.js';
 import { evaluateWait, explainWait, type WaitOutcome, type WaitSignals } from './waiter.js';
 import {
@@ -167,6 +167,12 @@ if (page) {
     // Điểm mấu chốt: đổi DOM KHÔNG có nghĩa là đổi tool list. Cập nhật registry
     // (element ref có thể đã bị thay) nhưng im lặng với server.
     current = next;
+
+    // Shadow root mới có thể vừa xuất hiện cùng lượt thay đổi này. KHÔNG có sự
+    // kiện nào báo `attachShadow`, nên đây là lúc duy nhất phát hiện được nó —
+    // trả giá bằng trễ một nhịp mutation, đúng như [R01] đã lường trước.
+    refreshObservation();
+
     if (isEmptyDiff(diff)) return diff;
 
     seq += 1;
@@ -185,6 +191,16 @@ if (page) {
     publishDelta();
   };
 
+  const OBSERVE_OPTIONS: MutationObserverInit = {
+    childList: true,
+    subtree: true,
+    // KHÔNG dùng attributeFilter: `checkAvailability` gọi `checkVisibility()`,
+    // nên một đổi `class` hay `style` cũng đổi được `available` của tool. Lọc
+    // theo danh sách attribute sẽ bỏ sót đúng nhóm đó — im lặng. Chi phí đổi
+    // lại được debounce + so sánh nội dung gánh.
+    attributes: true,
+  };
+
   const observer = new MutationObserver((records) => {
     // Ô dò locale của chính extension cũng là mutation — bỏ qua để không tự
     // đánh thức mình (nó nằm trong shadow root của một host ẩn, không mang
@@ -198,15 +214,28 @@ if (page) {
     deltaTimer = setTimeout(emitDelta, DELTA_DEBOUNCE_MS) as unknown as number;
   });
 
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    // KHÔNG dùng attributeFilter: `checkAvailability` gọi `checkVisibility()`,
-    // nên một đổi `class` hay `style` cũng đổi được `available` của tool. Lọc
-    // theo danh sách attribute sẽ bỏ sót đúng nhóm đó — im lặng. Chi phí đổi
-    // lại được debounce + so sánh nội dung gánh.
-    attributes: true,
-  });
+  /**
+   * Gắn lại observer cho document VÀ từng shadow root.
+   *
+   * Observer của `document` **không** thấy thay đổi bên trong shadow tree — phải
+   * observe từng root một. Nhưng thay vì giữ map host → observer rồi phải dọn
+   * khi host rời DOM (chỗ rò rỉ bộ nhớ kinh điển mà [R01] cảnh báo), ở đây dùng
+   * **một** observer và gắn lại toàn bộ sau mỗi lần quét: `disconnect()` xoá
+   * sạch mọi target cũ, kể cả những root đã mồ côi. Không sổ sách, không dọn dẹp,
+   * không rò rỉ.
+   *
+   * Chi phí: một lần duyệt cây mỗi lần publish. Chấp nhận được vì `scan()` cũng
+   * vừa duyệt xong ngay trước đó.
+   */
+  const refreshObservation = () => {
+    observer.disconnect();
+    observer.observe(document.documentElement, OBSERVE_OPTIONS);
+    for (const shadow of shadowRootsUnder(document)) {
+      observer.observe(shadow, OBSERVE_OPTIONS);
+    }
+  };
+
+  refreshObservation();
 
   chrome.runtime.onMessage.addListener((msg: SwToContent, _sender, sendResponse) => {
     switch (msg.type) {

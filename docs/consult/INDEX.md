@@ -17,8 +17,8 @@
 
 ## Việc mới lộ ra từ lưới E2E
 
-- **Scanner không xuyên shadow root.** Form khai báo đúng chuẩn nằm trong shadow DOM chưa bao giờ được phát hiện. Không phải ca hiếm: design system nào dùng web component cũng vậy. Đã ghi thành `test.fixme` trong `packages/e2e/tests/05-gaps.spec.ts`.
-- **Ô `time` vẫn suy từ `Intl` thay vì đo.** Đúng lỗi nguyên tắc đã sửa cho ô ngày nhưng chưa sửa cho ô giờ ([Q02](Q02-input-date-segment.md) câu 5). Cũng đã ghi thành `test.fixme`.
+- ~~**Scanner không xuyên shadow root.**~~ ✅ Đã làm ở M2 (03/08/2026): scanner đệ quy vào `shadowRoot`, observer gắn cho từng root, `livemcp-ignore`/`hidden` đi xuyên được ranh giới shadow. `fixme` đã gỡ.
+- **Ô `time` vẫn suy từ `Intl` thay vì đo.** Đúng lỗi nguyên tắc đã sửa cho ô ngày nhưng chưa sửa cho ô giờ ([Q02](Q02-input-date-segment.md) câu 5). Vẫn là `test.fixme` — *lưu ý: `test.fixme` KHÔNG tự nhắc khi tính năng xong, phải nhớ gỡ tay.*
 
 ## Đã áp dụng — thay đổi lớn nhất
 

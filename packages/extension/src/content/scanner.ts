@@ -41,9 +41,28 @@ function attr(el: Element, name: string): string | undefined {
   return v === null || v === '' ? undefined : v;
 }
 
+/**
+ * `closest` nhưng đi xuyên được ranh giới shadow.
+ *
+ * `Element.closest` dừng ở gốc cây của nó. Với phần tử nằm trong shadow root,
+ * điều đó nghĩa là `livemcp-ignore` hay `hidden` đặt ở light DOM **mất hiệu lực
+ * ngay tại biên** — một vùng khai là bỏ qua bỗng lại lộ ra tool. Đi tiếp qua
+ * `host` là cách khôi phục đúng ngữ nghĩa mà tác giả trang mong đợi.
+ */
+function closestAcrossShadow(el: Element, selector: string): Element | null {
+  let node: Element | null = el;
+  while (node) {
+    const hit = node.closest(selector);
+    if (hit) return hit;
+    const root = node.getRootNode();
+    node = root instanceof ShadowRoot ? root.host : null;
+  }
+  return null;
+}
+
 /** Phần tử nằm trong vùng `livemcp-ignore` thì vô hình với agent (spec §3.1). */
 function isIgnored(el: Element): boolean {
-  return el.closest('[livemcp-ignore]') !== null;
+  return closestAcrossShadow(el, '[livemcp-ignore]') !== null;
 }
 
 /** disabled / hidden → tool vẫn tồn tại nhưng ở trạng thái unavailable (spec §3.2). */
@@ -51,7 +70,7 @@ function checkAvailability(el: HTMLElement): { available: boolean; reason?: stri
   if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') {
     return { available: false, reason: 'phần tử đang bị disabled' };
   }
-  if (el.closest('[hidden]')) {
+  if (closestAcrossShadow(el, '[hidden]')) {
     return { available: false, reason: 'phần tử (hoặc tổ tiên) đang hidden' };
   }
   if (typeof el.checkVisibility === 'function' && !el.checkVisibility()) {
@@ -207,11 +226,49 @@ function toolFromForm(form: HTMLFormElement): ToolDecl | null {
   };
 }
 
-export function scan(root: Document = document): ScanResult {
-  const tools: ToolDecl[] = [];
-  const registry = new Map<string, HTMLElement[]>();
+/**
+ * Mọi shadow root **mở** nằm dưới một gốc, kể cả lồng nhau.
+ *
+ * Phải duyệt từng element chứ không query được: `el.shadowRoot` không phải
+ * attribute nên không có selector nào chạm tới nó. Đó là lý do hàm này chỉ
+ * được gọi trên gốc quét, không gọi lại trên mỗi mutation.
+ *
+ * Chỉ đi vào shadow root `open` — spec yêu cầu vậy, và mọi consumer khác của
+ * chuẩn (không phải extension) cũng chỉ thấy được `open`. Extension CÓ thể
+ * xuyên `closed` bằng `chrome.dom.openOrClosedShadowRoot`, nhưng dùng nó ở đây
+ * sẽ khiến trang chạy được với Live MCP mà hỏng với mọi consumer khác — một
+ * kiểu bất tuân chuẩn tự mình tạo ra. Chỗ đúng cho API đó là *validator* ở
+ * M3.5: phát hiện khai báo nằm trong closed root và báo lỗi tuân thủ, thay vì
+ * im lặng không thấy gì (N2).
+ */
+export function shadowRootsUnder(root: Document | ShadowRoot | Element): ShadowRoot[] {
+  const found: ShadowRoot[] = [];
+  const walk = (scope: Document | ShadowRoot | Element) => {
+    for (const el of scope.querySelectorAll<HTMLElement>('*')) {
+      const shadow = el.shadowRoot;
+      if (!shadow) continue;
+      found.push(shadow);
+      walk(shadow);
+    }
+  };
+  walk(root);
+  return found;
+}
 
-  for (const form of root.querySelectorAll<HTMLFormElement>('form[toolname], form[livemcp-name]')) {
+/**
+ * Quét declarative trong MỘT scope (không đệ quy sang shadow root).
+ *
+ * Phần tử *slotted* nằm ở light DOM nên `querySelectorAll` của document đã
+ * thấy nó rồi — cố ý KHÔNG đi qua `assignedElements`, làm vậy sẽ đếm trùng.
+ */
+function scanScope(
+  scope: Document | ShadowRoot,
+  tools: ToolDecl[],
+  registry: Map<string, HTMLElement[]>,
+): void {
+  for (const form of scope.querySelectorAll<HTMLFormElement>(
+    'form[toolname], form[livemcp-name]',
+  )) {
     if (isIgnored(form)) continue;
     const decl = toolFromForm(form);
     if (!decl || registry.has(decl.name)) continue;
@@ -219,7 +276,7 @@ export function scan(root: Document = document): ScanResult {
     tools.push(decl);
   }
 
-  for (const el of root.querySelectorAll<HTMLElement>('[livemcp-name]')) {
+  for (const el of scope.querySelectorAll<HTMLElement>('[livemcp-name]')) {
     if (el.tagName.toLowerCase() === 'form') continue; // đã xử lý ở vòng trên
     if (isIgnored(el)) continue;
     const decl = toolFromElement(el);
@@ -233,6 +290,16 @@ export function scan(root: Document = document): ScanResult {
     }
     registry.set(decl.name, [el]);
     tools.push(decl);
+  }
+}
+
+export function scan(root: Document = document): ScanResult {
+  const tools: ToolDecl[] = [];
+  const registry = new Map<string, HTMLElement[]>();
+
+  scanScope(root, tools, registry);
+  for (const shadow of shadowRootsUnder(root)) {
+    scanScope(shadow, tools, registry);
   }
 
   // TODO(M3): quét [livemcp-resource] → ResourceDecl + trích xuất JSON/table/list.

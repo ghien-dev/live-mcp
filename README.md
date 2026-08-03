@@ -10,13 +10,13 @@ bằng chuột và bàn phím thật (trusted events qua CDP), không gọi Java
 
 ## Trạng thái
 
-**M0 ✅ · M1 ✅ · M1.5 ✅ · M2 🔧** — toàn tuyến `agent → MCP → server → WebSocket → extension → CDP → DOM`
+**M0 ✅ · M1 ✅ · M1.5 ✅ · M2 ✅** — toàn tuyến `agent → MCP → server → WebSocket → extension → CDP → DOM`
 đã thông; form điền được đủ loại ô bằng bàn phím thật, mọi sự kiện `isTrusted: true`.
 Hub có token pairing + chặn origin web, và mọi text từ trang tới agent đi qua đúng một cửa.
 
 **Luận điểm trung tâm đã chứng minh được:** agent gọi một tool → đợi → **nhận tool mới
 sinh ra từ DOM mới** → gọi tiếp, không cần biết trước gì về chúng. Xem
-`packages/demo-site/dynamic.html`. Lưới E2E: 27 bài trên Chrome thật, ba locale.
+`packages/demo-site/dynamic.html`. Lưới E2E: 30 bài trên Chrome thật, ba locale.
 
 Milestone tiếp theo và thứ tự ưu tiên: [`docs/livemcp-roadmap.md`](docs/livemcp-roadmap.md).
 
@@ -111,7 +111,7 @@ Hai tầng, phân vai rõ:
 | Tầng | Bắt gì | Vì sao ở đó |
 |---|---|---|
 | **Unit** (vitest) | logic thuần nhiều nhánh: schema, định tuyến tên tool, thứ tự segment ngày, bảng phím, **cổng handshake + bộ lọc text tới agent** | nhiều nhánh, sai lặng lẽ, không cần browser |
-| **E2E** (Playwright) | layout, focus thật, CDP thật, locale thật, vòng đời MV3 | **chỉ browser thật mới thấy được lớp lỗi này** |
+| **E2E** (Playwright) | layout, focus thật, CDP thật, locale thật, vòng đời MV3, **DOM động và shadow DOM** | **chỉ browser thật mới thấy được lớp lỗi này** |
 
 Ranh giới giữa hai tầng không phải sở thích. jsdom trả `getBoundingClientRect()`
 toàn số 0, nên mọi test layout viết trên DOM giả sẽ **xanh trong khi sản phẩm
