@@ -1,4 +1,4 @@
-import { BOOK_TABLE, expect, SITE_URL, test } from '../fixtures/stack.js';
+import { BOOK_TABLE, expect, OPEN_MENU, SITE_URL, test } from '../fixtures/stack.js';
 
 /**
  * Ca 4 — vòng đời và khả năng hồi phục.
@@ -45,6 +45,24 @@ test('đóng tab → tool biến mất khỏi danh sách của agent', async ({ 
   await page.close();
 
   // Tool của một tab đã đóng phải biến mất, nếu không agent sẽ gọi vào hư không.
+  await stack.agent.waitForToolGone(BOOK_TABLE, 30_000);
+});
+
+test('điều hướng trong cùng tab: tool trang cũ biến sạch, không sót tàn dư', async ({ stack }) => {
+  // Playwright chỉ điều hướng (dựng rạp), không thao tác thay agent.
+  const page = await stack.context.newPage();
+  await page.goto(`${SITE_URL}/dynamic.html`);
+  await stack.agent.waitForTool(OPEN_MENU);
+
+  await page.goto(`${SITE_URL}/booking.html`);
+  await stack.agent.waitForTool(BOOK_TABLE);
+
+  // Đây là chỗ `seq` một mình không đủ: content script chết theo điều hướng nên
+  // trang mới đếm seq lại từ 0, và mọi message trễ của trang cũ đều có seq lớn
+  // hơn. `pageId` mới phân biệt được "của trang khác" với "cũ hơn".
+  expect(await stack.agent.toolNames()).not.toContain(OPEN_MENU);
+
+  await page.close();
   await stack.agent.waitForToolGone(BOOK_TABLE, 30_000);
 });
 

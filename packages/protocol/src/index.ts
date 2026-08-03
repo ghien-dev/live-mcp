@@ -162,10 +162,23 @@ export interface ResourceDecl {
 // Extension → Server
 // ---------------------------------------------------------------------------
 
+/**
+ * Danh tính của MỘT LẦN LOAD TRANG trong một tab.
+ *
+ * Vì sao `seq` một mình không đủ (sửa giả định ở kiến trúc §6.2): `seq` là bộ
+ * đếm sống trong content script, mà content script **chết theo mỗi lần điều
+ * hướng** — trang mới bắt đầu đếm lại từ 0. Nên một delta đến trễ từ trang CŨ
+ * (seq=7) vẫn lớn hơn seq của trang MỚI (seq=1) và sẽ được áp nhầm, đúng cái
+ * race mà §6.2 định chống. `pageId` sinh mới mỗi lần load nên phân biệt được
+ * "cũ hơn" với "của trang khác" — hai chuyện `seq` không tách nổi.
+ */
+export type PageId = string;
+
 /** Tab load trang có meta livemcp — khai sinh session. */
 export interface SiteAnnounceMsg {
   type: 'site_announce';
   tabId: number;
+  pageId: PageId;
   url: string;
   app: string;
   description: string;
@@ -176,6 +189,7 @@ export interface SiteAnnounceMsg {
 export interface DeclarativeSnapshotMsg {
   type: 'declarative_snapshot';
   tabId: number;
+  pageId: PageId;
   seq: number;
   tools: ToolDecl[];
   resources: ResourceDecl[];
@@ -185,6 +199,7 @@ export interface DeclarativeSnapshotMsg {
 export interface DeclarativeDeltaMsg {
   type: 'declarative_delta';
   tabId: number;
+  pageId: PageId;
   seq: number;
   added: ToolDecl[];
   removed: string[];

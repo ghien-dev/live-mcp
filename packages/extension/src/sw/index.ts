@@ -74,6 +74,7 @@ chrome.runtime.onMessage.addListener((msg: ContentToSw, sender) => {
     link.send({
       type: 'site_announce',
       tabId,
+      pageId: msg.site.pageId,
       url: msg.site.url,
       app: msg.site.app,
       description: msg.site.description,
@@ -82,6 +83,7 @@ chrome.runtime.onMessage.addListener((msg: ContentToSw, sender) => {
     link.send({
       type: 'declarative_snapshot',
       tabId,
+      pageId: msg.site.pageId,
       seq: msg.seq,
       tools: msg.tools,
       resources: msg.resources,
@@ -95,6 +97,7 @@ chrome.runtime.onMessage.addListener((msg: ContentToSw, sender) => {
     link.send({
       type: 'declarative_delta',
       tabId,
+      pageId: msg.pageId,
       seq: msg.seq,
       added: msg.added,
       removed: msg.removed,

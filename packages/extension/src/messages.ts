@@ -12,6 +12,13 @@
 import type { ActionStatus, ResourceDecl, ToolDecl } from '@livemcp/protocol';
 
 export interface PageInfo {
+  /**
+   * Danh tính của lần load trang này. Sinh mới mỗi khi content script khởi
+   * động, nên nó phân biệt được "trang mới" với "trang cũ nói vọng lại" — thứ
+   * mà `seq` không làm được vì `seq` reset theo mỗi lần load (xem PageId ở
+   * @livemcp/protocol).
+   */
+  pageId: string;
   url: string;
   app: string;
   description: string;
@@ -48,6 +55,7 @@ export type ContentToSw =
    */
   | {
       type: 'cs_declarative_delta';
+      pageId: string;
       seq: number;
       added: ToolDecl[];
       removed: string[];

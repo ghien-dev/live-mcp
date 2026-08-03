@@ -13,6 +13,8 @@ import { log } from '../log.js';
  */
 export interface SiteSession {
   tabId: number;
+  /** Lần load trang hiện tại. Message mang pageId khác = tàn dư của trang cũ. */
+  pageId: string;
   url: string;
   app: string;
   /** Namespace duy nhất, ví dụ 'shopviet' → tool 'shopviet__add_to_cart'. */
@@ -86,6 +88,7 @@ export class SessionStore {
 
     const session: SiteSession = {
       tabId: msg.tabId,
+      pageId: msg.pageId,
       url: msg.url,
       app: msg.app,
       namespace,
@@ -102,16 +105,37 @@ export class SessionStore {
     return session;
   }
 
+  /**
+   * Message có thuộc về lần load trang đang hiện hành không?
+   *
+   * Kiểm pageId TRƯỚC seq, vì hai điều kiện này bắt hai chuyện khác nhau:
+   * pageId bắt "của trang khác", seq bắt "cũ hơn trong cùng trang". Đảo thứ tự
+   * là sai: delta trễ của trang cũ có seq lớn hơn seq của trang mới.
+   */
+  private isStale(msg: { tabId: number; pageId: string; seq: number }, kind: string): boolean {
+    const session = this.sessions.get(msg.tabId);
+    if (!session) return true;
+    if (msg.pageId !== session.pageId) {
+      log.warn(
+        `bỏ ${kind} của lần load trang đã cũ  tab=${msg.tabId} ` +
+          `pageId=${msg.pageId.slice(0, 8)}… (đang dùng ${session.pageId.slice(0, 8)}…)`,
+      );
+      return true;
+    }
+    if (msg.seq <= session.lastSeq) {
+      log.warn(`bỏ ${kind} cũ tab=${msg.tabId} seq=${msg.seq} <= ${session.lastSeq}`);
+      return true;
+    }
+    return false;
+  }
+
   applySnapshot(msg: DeclarativeSnapshotMsg): void {
     const session = this.sessions.get(msg.tabId);
     if (!session) {
       log.warn(`snapshot cho tab lạ ${msg.tabId} — bỏ qua (chưa có site_announce)`);
       return;
     }
-    if (msg.seq <= session.lastSeq) {
-      log.warn(`bỏ snapshot cũ tab=${msg.tabId} seq=${msg.seq} <= ${session.lastSeq}`);
-      return;
-    }
+    if (this.isStale(msg, 'snapshot')) return;
     session.lastSeq = msg.seq;
     session.tools = new Map(msg.tools.map((t) => [t.name, t]));
     session.resources = new Map(msg.resources.map((r) => [r.name, r]));
@@ -125,10 +149,7 @@ export class SessionStore {
   applyDelta(msg: DeclarativeDeltaMsg): void {
     const session = this.sessions.get(msg.tabId);
     if (!session) return;
-    if (msg.seq <= session.lastSeq) {
-      log.warn(`bỏ delta cũ tab=${msg.tabId} seq=${msg.seq} <= ${session.lastSeq}`);
-      return;
-    }
+    if (this.isStale(msg, 'delta')) return;
     session.lastSeq = msg.seq;
     for (const name of msg.removed) session.tools.delete(name);
     for (const tool of [...msg.added, ...msg.changed]) session.tools.set(tool.name, tool);

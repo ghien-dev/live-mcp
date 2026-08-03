@@ -284,7 +284,9 @@ new MutationObserver(muts => scheduleRescan(muts)).observe(document.documentElem
 
 ### 6.2 Vòng đời session & đồng bộ
 
-- `seq` tăng dần theo tab trong mọi message declarative; server bỏ message có seq cũ hơn đã nhận (chống race khi delta về trễ hơn snapshot mới sau navigation).
+- **`pageId` + `seq`** trong mọi message declarative. Server bỏ message có `pageId` khác lần load hiện tại, **rồi mới** bỏ message có `seq` cũ hơn — hai điều kiện bắt hai chuyện khác nhau: `pageId` bắt *"của trang khác"*, `seq` bắt *"cũ hơn trong cùng trang"*.
+
+  > **Sửa ngày 03/08/2026.** Bản đầu chỉ có `seq` và mô tả nó là *"tăng dần theo tab"*. Sai: `seq` là bộ đếm sống trong **content script**, mà content script chết theo mỗi lần điều hướng — trang mới đếm lại từ 0. Nên một delta trễ của trang cũ (`seq=7`) luôn lớn hơn `seq` của trang mới (`seq=1`) và **lọt qua** đúng cái chốt định chặn nó. Ca kiểm: `packages/server/src/store/sessions.test.ts`.
 - Navigation = `site_gone` + `site_announce` + snapshot mới (extension chịu trách nhiệm phát đúng thứ tự).
 - Extension mất kết nối WS → server giữ tool list 30s (grace period cho SW MV3 hồi sinh) rồi mới gỡ; agent gọi tool trong lúc mất kết nối nhận lỗi rõ ràng "extension disconnected, đang chờ kết nối lại".
 

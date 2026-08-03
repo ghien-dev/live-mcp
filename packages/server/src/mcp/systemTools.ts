@@ -1,7 +1,16 @@
 import type { SessionStore } from '../store/sessions.js';
 import type { McpToolShape } from '../parser/tools.js';
-import { qualifyToolName } from '@livemcp/protocol';
+import { DEFAULT_WAIT_TIMEOUT_MS, qualifyToolName } from '@livemcp/protocol';
 import { scrubWebText } from './agentText.js';
+
+/**
+ * Trần cứng cho `livemcp_wait`.
+ *
+ * Có trần vì agent tự đặt tham số này, và một `timeoutMs` viết nhầm thành
+ * 600000 sẽ treo cả phiên làm việc mà không ai hiểu vì sao. Trần do server đặt
+ * là thứ agent không tự nới được.
+ */
+const MAX_WAIT_MS = 60_000;
 
 /**
  * Tool hệ thống do server tự expose, không đến từ trang web
@@ -33,6 +42,33 @@ export const systemToolShapes: McpToolShape[] = [
       },
     },
   },
+  {
+    name: 'livemcp_wait',
+    description:
+      'Đợi một tool xuất hiện (hoặc biến mất) sau khi trang tự thay đổi. ' +
+      'Chỉ cần dùng khi trang đổi vì lý do KHÁC hành động của bạn — ví dụ dữ liệu ' +
+      'tự tải xong, hoặc một hành động trước đó có hiệu ứng chậm. Sau mỗi hành động ' +
+      'bình thường, tool mới đã được báo ngay trong kết quả nên KHÔNG cần gọi tool này.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tool: {
+          type: 'string',
+          description:
+            'Tên tool cần đợi, đầy đủ cả namespace (ví dụ "shopviet__add_to_cart").',
+        },
+        gone: {
+          type: 'boolean',
+          description: 'true = đợi tool BIẾN MẤT thay vì xuất hiện. Mặc định false.',
+        },
+        timeoutMs: {
+          type: 'number',
+          description: `Trần thời gian đợi, ms. Mặc định ${DEFAULT_WAIT_TIMEOUT_MS}, tối đa ${MAX_WAIT_MS}.`,
+        },
+      },
+      required: ['tool'],
+    },
+  },
 ];
 
 const SYSTEM_TOOL_NAMES = new Set(systemToolShapes.map((t) => t.name));
@@ -46,11 +82,69 @@ export function isSystemTool(name: string): boolean {
   return SYSTEM_TOOL_NAMES.has(name);
 }
 
+/**
+ * Đợi một tool xuất hiện / biến mất khỏi danh sách.
+ *
+ * Nghe `store.onChange` thay vì polling: mọi thay đổi tool list đều đã đi qua
+ * đó rồi (delta từ extension → store → `tools/list_changed`), nên polling chỉ
+ * là thêm một nguồn sự thật thứ hai chạy lệch nhịp với nguồn thứ nhất.
+ */
+function waitForTool(
+  store: SessionStore,
+  qualified: string,
+  gone: boolean,
+  timeoutMs: number,
+): Promise<string> {
+  const has = () =>
+    store.list().some((s) => {
+      for (const t of s.tools.keys()) {
+        if (qualifyToolName(s.namespace, t) === qualified) return true;
+      }
+      for (const r of s.resources.keys()) {
+        if (qualifyToolName(s.namespace, `read_${r}`) === qualified) return true;
+      }
+      return false;
+    });
+
+  const satisfied = () => (gone ? !has() : has());
+  const verb = gone ? 'biến mất' : 'xuất hiện';
+
+  if (satisfied()) {
+    return Promise.resolve(`Tool "${qualified}" đã ${verb} rồi (không phải đợi).`);
+  }
+
+  return new Promise<string>((resolve) => {
+    let finished = false;
+
+    const finish = (message: string) => {
+      if (finished) return;
+      finished = true;
+      unsubscribe();
+      clearTimeout(timer);
+      resolve(message);
+    };
+
+    const timer = setTimeout(
+      () =>
+        finish(
+          `Quá ${timeoutMs}ms mà tool "${qualified}" vẫn chưa ${verb}. ` +
+            'Có thể trang chưa phản ứng, hoặc tên tool không đúng — ' +
+            'gọi livemcp_get_tools để xem danh sách hiện tại.',
+        ),
+      timeoutMs,
+    );
+
+    const unsubscribe = store.onChange(() => {
+      if (satisfied()) finish(`Tool "${qualified}" đã ${verb}.`);
+    });
+  });
+}
+
 export function callSystemTool(
   name: string,
   args: Record<string, unknown>,
   store: SessionStore,
-): string {
+): string | Promise<string> {
   switch (name) {
     case 'livemcp_list_sites': {
       const sites = store.list();
@@ -97,6 +191,15 @@ export function callSystemTool(
           );
         })
         .join('\n\n');
+    }
+
+    case 'livemcp_wait': {
+      const tool = typeof args.tool === 'string' ? args.tool.trim() : '';
+      if (!tool) return 'Thiếu tham số bắt buộc "tool" (tên tool cần đợi).';
+
+      const raw = typeof args.timeoutMs === 'number' ? args.timeoutMs : DEFAULT_WAIT_TIMEOUT_MS;
+      const timeoutMs = Math.min(Math.max(raw, 100), MAX_WAIT_MS);
+      return waitForTool(store, tool, args.gone === true, timeoutMs);
     }
 
     default:

@@ -63,6 +63,27 @@ test('đợi bằng livemcp-wait chứ không bằng sleep', async ({ stack, dyn
   expect(await dynamic.locator('.menu-item').count()).toBe(3);
 });
 
+test('livemcp_wait: có sẵn thì trả ngay, không có thì hết giờ tử tế', async ({ stack, dynamic }) => {
+  expect(dynamic.url()).toContain('dynamic.html');
+
+  const now = await stack.agent.callTool('livemcp_wait', { tool: OPEN_MENU });
+  expect(now.isError, now.text).toBe(false);
+  expect(now.text).toContain('không phải đợi');
+
+  // Tool không bao giờ tới: phải hết giờ ĐÚNG hạn và nói rõ, chứ không treo
+  // phiên làm việc. Đây là lý do server tự đặt trần thay vì tin tham số agent.
+  const started = Date.now();
+  const never = await stack.agent.callTool('livemcp_wait', {
+    tool: 'dynamicdemo__khong_bao_gio_ton_tai',
+    timeoutMs: 1_000,
+  });
+  const elapsed = Date.now() - started;
+
+  expect(never.text).toContain('vẫn chưa xuất hiện');
+  expect(elapsed).toBeGreaterThanOrEqual(900);
+  expect(elapsed).toBeLessThan(5_000);
+});
+
 test('livemcp-state kẹt ở busy KHÔNG treo agent tới hết giờ', async ({ stack, dynamic }) => {
   // Nút này cố ý không bao giờ đặt lại state về ready — mô phỏng đúng lỗi dev
   // hay mắc và không tự thấy. Ràng buộc từ R07: state là tối ưu hoá, DOM lắng

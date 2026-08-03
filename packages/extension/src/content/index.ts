@@ -53,6 +53,16 @@ if (page) {
   let seq = 0;
 
   /**
+   * Danh tính của đúng lần load này.
+   *
+   * Sinh ở đây chứ không ở service worker là có lý do: SW không biết chắc lúc
+   * nào một context content script chết đi và cái mới sinh ra (bfcache, SPA
+   * navigation, prerender). Chỉ chính content script mới biết "tôi vừa mới bắt
+   * đầu" — và đó đúng là sự kiện cần đánh dấu.
+   */
+  const pageId: string = crypto.randomUUID();
+
+  /**
    * Hành động đang chạy, dưới dạng máy trạng thái điền từng ô một:
    *
    *   probe → field(0) → field(1) → … → submit → (đợi + đọc kết quả)
@@ -89,6 +99,7 @@ if (page) {
     send({
       type: 'cs_site_ready',
       site: {
+        pageId,
         url: location.href,
         app: page.app,
         description: page.description,
@@ -138,6 +149,7 @@ if (page) {
       send({
         type: 'cs_site_ready',
         site: {
+          pageId,
           url: location.href,
           app: page.app,
           description: page.description,
@@ -158,7 +170,7 @@ if (page) {
     if (isEmptyDiff(diff)) return diff;
 
     seq += 1;
-    send({ type: 'cs_declarative_delta', seq, ...diff });
+    send({ type: 'cs_declarative_delta', pageId, seq, ...diff });
     return diff;
   };
 

@@ -103,9 +103,9 @@ Chủ dự án viết trong [`project-ideal.md`](project-ideal.md): *"DOM mới 
 **Việc cụ thể**
 
 1. ✅ `MutationObserver` trong content script, lọc đúng theo declarative và debounce (kiến trúc §5.2) → `declarative_delta`.
-2. ✅ Server phát `notifications/tools/list_changed` khi tool list đổi *(đã có từ M0)*; ⬜ xử lý `seq` chống race giữa delta và snapshot mới sau navigation (§6.2) — chưa có ca kiểm.
+2. ✅ Server phát `notifications/tools/list_changed` khi tool list đổi *(đã có từ M0)*; ✅ chống race sau navigation — **hoá ra `seq` một mình không đủ**, phải thêm `pageId`; kiến trúc §6.2 đã được sửa kèm lý do.
 3. ✅ Waiter thật theo spec §7.2: `livemcp-state` → `livemcp-wait`/`wait-gone` → DOM lắng → timeout. **Ràng buộc từ [R07] câu 2 đã hiện thực:** state là **tối ưu hoá**, DOM lắng là **đường tin cậy**; `state="busy"` kẹt trong khi DOM đã lắng ≥2s thì đi tiếp và **cảnh báo to** thay vì đợi hết giờ.
-4. ⬜ Tool hệ thống `livemcp_wait(site, selector?, timeoutMs)` — cho agent chủ động đợi (§6.4).
+4. ✅ Tool hệ thống `livemcp_wait(tool, gone?, timeoutMs?)` — cho agent chủ động đợi (§6.4). Nghe `store.onChange` chứ không polling, và **server tự đặt trần 60s** thay vì tin tham số agent gửi lên.
 5. ✅ Trang demo: `dynamic.html` — menu danh mục sinh tool tại chỗ, kèm một nút **cố ý để state mục** làm ca kiểm cho ràng buộc trên.
 6. **Shadow DOM** — *hạng mục cuối, có quyền rơi* (xem [R01] và phần nghiệm thu). Scanner đệ quy vào `shadowRoot`; observer gắn cho **từng** shadow root. Bốn cạm bẫy đã biết trước:
    - **Không có sự kiện nào báo `attachShadow`** — node có thể vào DOM trước rồi mới gắn shadow root. Ứng phó: mỗi lần xử lý node trong delta thì kiểm lại `el.shadowRoot`, chấp nhận trễ một nhịp mutation. **Không** monkey-patch `Element.prototype.attachShadow` — đường đó tiêm code vào trang, phá chính ranh giới content script.
@@ -296,6 +296,7 @@ Không thuộc milestone nào; ghi ra để không rơi.
 | R05 | Khi nào đóng băng spec v1.0? | quan-trọng | 🔧 đang áp dụng | 2026-08-02 | Fable |
 | R06 | Đo thế nào để biết chuẩn đang sống? | quan-trọng | 🔧 đang áp dụng | 2026-08-02 | Fable |
 | R07 | Rủi ro lớn nhất mà lộ trình này chưa thấy? | tham-khảo | 🔧 đang áp dụng | 2026-08-02 | Fable |
+| R08 | Ba phát biểu kiến trúc đã phải sửa sau khi va thực tế — có cách bắt sớm không? | quan-trọng | ⏳ chờ | 2026-08-03 | |
 
 *Trạng thái: ⏳ chờ · ✅ đã trả lời · 🔧 đang áp dụng · ✔ khép lại*
 
@@ -604,6 +605,38 @@ Lối ra không phải chạy đua độ phủ với vision — là đứng ở 
 - **Ranh giới "ngoài phạm vi v1"** (contenteditable/rich-text, drag-and-drop thật, slider tuỳ chế) → bảng nợ kỹ thuật, khai ngay ở M1.5. Chưa cần giải; nhưng *ranh giới khai ra là quyết định, không khai là lỗ hổng chờ người dùng phát hiện*.
 - **Điểm tự-mâu-thuẫn tôi đã không nhìn ra:** `livemcp-state` — xương sống cơ chế đợi của M2 — **trượt chính phép thử N3** của tôi (dev quên cập nhật, trang vẫn chạy bình thường), và là hình dạng rot số một theo bài học ARIA ở Q06. Không bỏ nó, nhưng M2 phải thiết kế theo: **state là tối ưu hoá, DOM lắng là đường tin cậy**; validator M3.5 lint state-rot ở ưu tiên cao nhất. Kỳ vọng đúng là state rot sẽ là *chuyện thường*, không phải ngoại lệ. Đã ghi vào hạng mục 3 của M2 — nếu không có câu này, tôi sẽ dựng waiter tin state trước rồi mới phát hiện ra ở thực địa.
 - **M2.5** ra đời từ câu 3 (trùng R06 câu 3) — xem ghi nhận ở R06.
+
+---
+
+### R08 — Ba phát biểu kiến trúc đã phải sửa sau khi va thực tế. Có cách bắt sớm không?
+
+**Mức:** quan-trọng · **Hỏi:** 2026-08-03 · **Trạng thái:** ⏳ chờ
+
+**Bối cảnh.** Tính tới nay, **ba** phát biểu trong `livemcp-architecture.md` đã phải sửa sau khi hiện thực chạm vào thực tế. Cả ba đều nghe rất hợp lý lúc viết, và cả ba đều sai theo cùng một kiểu:
+
+| | Phát biểu gốc | Vì sao sai | Phát hiện lúc |
+|---|---|---|---|
+| §2.2 | *"Toạ độ là ngôn ngữ chung của mọi hành động"* | mỗi phép đo `scrollIntoView` làm hỏng toạ độ đo trước | nghiệm thu M1, sau khi đã sống qua cả M0 |
+| §5.5 | *"SW chờ content script báo ong đã tới nơi rồi mới dispatch"* | đặt thêm một failure mode lên đúng đường thi hành | chuyên gia chỉ ra ở [R04], chưa kịp cắn |
+| §6.2 | *"`seq` tăng dần theo tab"* | `seq` sống trong content script — chết và đếm lại từ 0 mỗi lần điều hướng, nên delta trễ của trang cũ luôn thắng | lúc hiện thực M2, 03/08 |
+
+Kiểu chung: **một bất biến được phát biểu ở tầng ý niệm, nhưng thứ hiện thực nó lại sống ở một tầng có vòng đời khác.** "Tăng dần theo tab" giả định bộ đếm sống theo tab, trong khi nó sống theo *lần load trang*. "Toạ độ là ngôn ngữ chung" giả định toạ độ ổn định, trong khi phép đo tự làm nó đổi.
+
+Điều làm tôi không yên: §5.5 chỉ được phát hiện vì có người ngoài đọc lại. §2.2 và §6.2 thì phải đợi mã chạy mới lộ. Không có cơ chế nào đang bắt lớp lỗi này — nó chỉ được bắt bởi may mắn hoặc bởi thời gian.
+
+**Câu hỏi**
+
+1. Có thực hành nào **rẻ** bắt sớm lớp lỗi này không? Ý tôi là rẻ thật — dự án một người, không dựng nổi quy trình review nhiều vòng.
+2. Cụ thể hơn: có nên yêu cầu **mỗi phát biểu bất biến trong tài liệu kiến trúc phải kèm một trong hai thứ** — một ca kiểm chạy được, hoặc một nhãn *"giả định chưa kiểm"*? Cái giá là tài liệu rườm hơn và viết chậm hơn; cái được là không còn phát biểu nào trông chắc chắn hơn thực tế của nó.
+3. Hay đây là chi phí bình thường không đáng chống, và tiền nên dồn vào chỗ khác — ví dụ đúng M2.5 (chạm thực địa) mà [R07] đã chọn?
+
+#### ▸ Trả lời
+
+*(chưa có)*
+
+#### ▸ Ghi nhận & áp dụng
+
+*(chưa có)*
 
 ---
 

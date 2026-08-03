@@ -33,7 +33,7 @@ export function createMcpServer(store: SessionStore, bridge: ExtensionBridge): S
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
 
     if (isSystemTool(name)) {
-      return textResult(callSystemTool(name, args, store));
+      return textResult(await callSystemTool(name, args, store));
     }
     return callSiteTool(name, args, store, bridge);
   });
