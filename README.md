@@ -40,17 +40,30 @@ npm run build
 npm run dev:site        # http://localhost:5180
 ```
 
-**2. Local Server** — chạy độc lập để xem log, hoặc để agent tự spawn (bước 4).
+**2. Local Server — chọn MỘT trong hai cách, không được cả hai**
 
-```bash
-npm run dev:server
-```
+> ⚠️ Server giữ hub WebSocket ở cổng `8787`, và extension chỉ nối vào **một** chỗ.
+> Chạy `npm run dev:server` trong lúc agent cũng tự spawn server thì tiến trình
+> thứ hai chết vì `EADDRINUSE`, và ở phía agent nó hiện ra thành một lỗi MCP
+> không giải thích gì. Đây là cái bẫy dễ sập nhất của cả quy trình.
+
+| Cách | Khi nào dùng |
+|---|---|
+| **Để agent tự spawn** (bước 4) | dùng thật — không chạy `dev:server` |
+| `npm run dev:server` | muốn xem log server trực tiếp — lúc này **đừng** đấu nối agent |
 
 **3. Extension** — `chrome://extensions` → bật *Developer mode* → *Load unpacked* →
 chọn `packages/extension/dist`.
 
-**Ghép token (một lần).** Server in ra dòng `token pairing: …` lúc khởi động và
-lưu tại `~/.livemcp/token`. Bấm icon extension → dán token → *Lưu & kết nối lại*.
+**Ghép token (một lần).**
+
+```bash
+npm run token           # in token, KHÔNG mở cổng nào — chạy được kể cả khi agent đang giữ server
+```
+
+Bấm icon extension → dán token → *Lưu & kết nối lại*. Token lưu ở
+`~/.livemcp/token` nên mọi tiến trình server đều dùng chung, ghép một lần là xong.
+
 Không có token thì server từ chối kết nối, và đó là **chủ ý**: handshake WebSocket
 không bị CORS chặn, nên bất kỳ trang web nào bạn đang mở cũng nối được tới
 `ws://127.0.0.1:8787` nếu hub không kiểm gì. Extension còn bị chặn thêm một lớp
@@ -62,8 +75,8 @@ Mở `http://localhost:5180`, mở DevTools Console, phải thấy:
 [Live MCP] "LiveMCP Demo" — phát hiện 1 tool declarative.
 ```
 
-Log của server phải thấy `extension đã kết nối` → `site_announce` → `snapshot ... tools=1`.
-Nếu thấy `từ chối kết nối: …` thì token chưa đúng — dán lại ở popup.
+Popup extension phải hiện chấm xanh *"đã nối server"*. Nếu Console báo
+`server TỪ CHỐI kết nối` thì token chưa đúng — chạy `npm run token` và dán lại.
 
 **4. Đấu nối agent**
 
@@ -71,9 +84,16 @@ Nếu thấy `từ chối kết nối: …` thì token chưa đúng — dán l�
 claude mcp add livemcp -- node D:/vibeBoss/webmcp/LiveMCP/packages/server/dist/index.js --stdio
 ```
 
+Nhớ **tắt `npm run dev:server`** trước bước này (xem cảnh báo ở bước 2) — agent
+tự spawn server riêng, hai bên không dùng chung cổng được.
+
 Rồi yêu cầu agent: *"gọi tool livemcp_list_sites"* → *"gọi livemcp_demo__say_hello"*.
 Nút trên trang phải thực sự bị bấm, Chrome hiện banner "đang debug", và ô kết quả
 ghi **sự kiện thật (trusted)** — đó là bằng chứng CDP hoạt động đúng.
+
+Muốn xem vòng lặp trung tâm của chuẩn thì mở `dynamic.html` và bảo agent
+*"gọi dynamicdemo__mo_danh_muc"*: ba tool `chon_*` **chưa hề tồn tại** trước lệnh
+đó, và agent nhận được tên chúng ngay trong kết quả trả về.
 
 > Banner *"Live MCP is debugging this browser"* là **cố ý**, không phải lỗi: không có
 > cách hợp lệ nào tắt nó, và nó cho user biết agent đang điều khiển trình duyệt.

@@ -21,7 +21,8 @@
     "dev:site": "npm run dev -w @livemcp/demo-site",
     "test": "vitest run",
     "test:e2e": "npm run test -w @livemcp/e2e",
-    "e2e:setup": "npm run install-browser -w @livemcp/e2e"
+    "e2e:setup": "npm run install-browser -w @livemcp/e2e",
+    "token": "node packages/server/dist/index.js --print-token"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

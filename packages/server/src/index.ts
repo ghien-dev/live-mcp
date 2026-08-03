@@ -22,6 +22,7 @@ function parseArgs(argv: string[]) {
   const wsPortIdx = argv.indexOf('--ws-port');
   return {
     http: argv.includes('--http'),
+    printToken: argv.includes('--print-token'),
     wsPort: wsPortIdx >= 0 ? Number(argv[wsPortIdx + 1]) : LIVEMCP_WS_PORT,
   };
 }
@@ -31,6 +32,19 @@ async function main(): Promise<void> {
   if (opts.http) {
     log.error('Transport Streamable HTTP chưa được hiện thực (M7). Hiện chỉ hỗ trợ --stdio.');
     process.exit(1);
+  }
+
+  /**
+   * `--print-token` in token rồi thoát, KHÔNG mở WS hub.
+   *
+   * Có mặt vì một cái bẫy có thật: cách duy nhất để xem token trước đây là chạy
+   * server, mà server thì giữ cổng 8787 — nên người dùng vô tình chặn chính
+   * instance mà agent sắp spawn, và chỉ nhận về một mã lỗi MCP không giải thích
+   * gì. Lấy token không được phép đòi dựng cả hệ.
+   */
+  if (opts.printToken) {
+    process.stdout.write(`${loadOrCreateToken().token}\n`);
+    return;
   }
 
   const store = new SessionStore();
@@ -96,6 +110,20 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+  // Cổng bận là ca thường gặp nhất, và trước đây nó chết câm: agent chỉ nhận
+  // một mã lỗi MCP trần trụi, còn nguyên nhân thật (một Live MCP server khác
+  // đang chạy) thì không ai nói ra. Hỏng ồn ào (N2).
+  if ((err as NodeJS.ErrnoException)?.code === 'EADDRINUSE') {
+    const port = (err as { port?: number }).port ?? LIVEMCP_WS_PORT;
+    log.error(
+      `Cổng ${port} đã có tiến trình khác giữ — gần như chắc chắn là một Live MCP ` +
+        'server khác đang chạy (ví dụ `npm run dev:server`).\n' +
+        '  Mỗi lúc chỉ được MỘT server giữ hub WebSocket, vì extension chỉ nối vào một chỗ.\n' +
+        '  → Tắt tiến trình kia, hoặc chạy server này với `--ws-port <cổng khác>`.\n' +
+        '  → Chỉ cần xem token thì dùng `--print-token`, lệnh đó không mở cổng nào.',
+    );
+    process.exit(1);
+  }
   log.error('server không khởi động được:', err);
   process.exit(1);
 });
