@@ -128,6 +128,23 @@ export class ExtensionBridge {
     return this.sockets.size > 0;
   }
 
+  /**
+   * Đẩy một message tới tab cụ thể, không đợi hồi đáp (kênh Ask).
+   *
+   * Khác `dispatch`: ở đây không có cặp request/response. Xác nhận đi theo đường
+   * riêng (`ask_delivered`) vì widget có thể đang tải lại trang đúng lúc câu trả
+   * lời tới — chờ đồng bộ ở đây sẽ chỉ sinh ra timeout giả.
+   *
+   * Rơi về socket đầu tiên khi chưa biết tab: service worker MV3 chỉ giữ MỘT
+   * WebSocket cho cả trình duyệt, nên "socket của tab" thực chất luôn là nó.
+   */
+  sendToTab(tabId: number, msg: ServerToExtensionMsg): boolean {
+    const socket = this.tabSockets.get(tabId) ?? [...this.sockets][0];
+    if (!socket) return false;
+    this.send(socket, msg);
+    return true;
+  }
+
   private send(socket: WebSocket, msg: ServerToExtensionMsg): void {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg));
   }

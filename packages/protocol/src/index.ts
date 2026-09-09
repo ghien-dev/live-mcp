@@ -68,6 +68,35 @@ export const ACTION_SLACK_MS = 20_000;
 export const MAX_RESULT_CHARS = 4_000;
 
 // ---------------------------------------------------------------------------
+// Kênh Ask — hằng số
+// ---------------------------------------------------------------------------
+
+/**
+ * Trần thời gian `livemcp_ask_wait` được phép chặn.
+ *
+ * 55s là con số nhắm dưới timeout tool-call của claude.ai (~60s). Vượt trần thì
+ * client bỏ cuộc trước server, và agent nhận về một lỗi transport không nói gì
+ * thay vì "chưa có câu hỏi nào" — mất luôn khả năng lặp vòng.
+ */
+export const ASK_MAX_WAIT_MS = 55_000;
+export const ASK_DEFAULT_WAIT_MS = 50_000;
+
+/**
+ * Câu hỏi đã claim mà không được trả lời trong khoảng này thì quay về `pending`.
+ *
+ * Có TTL vì phiên Claude web có thể biến mất giữa chừng (đóng tab, hết context,
+ * đổi hội thoại) mà không ai báo. Không có TTL thì câu hỏi bị khoá vĩnh viễn ở
+ * trạng thái "đang xử lý" và người dùng ngồi chờ một thứ không còn tồn tại.
+ */
+export const ASK_CLAIM_TTL_MS = 180_000;
+
+/** Giữ câu hỏi đã giao thêm khoảng này rồi mới dọn (đủ cho widget resync sau F5). */
+export const ASK_RETENTION_MS = 600_000;
+
+/** Trần số câu hỏi giữ trong bộ nhớ; quá thì bỏ cái cũ nhất đã giao xong. */
+export const ASK_MAX_QUESTIONS = 200;
+
+// ---------------------------------------------------------------------------
 // Khai báo declarative (content script sinh ra từ DOM)
 // ---------------------------------------------------------------------------
 
@@ -240,12 +269,64 @@ export interface PongMsg {
   type: 'pong';
 }
 
+/**
+ * Vòng đời một câu hỏi (kênh Ask).
+ *
+ * `answered` tách khỏi "đã giao": agent trả lời xong không có nghĩa widget đã
+ * nhận được. Tab có thể đang F5 đúng lúc đó. Cờ `delivered` riêng là thứ giữ cho
+ * câu trả lời sống sót qua một lần tải lại trang.
+ */
+export type AskStatus = 'pending' | 'claimed' | 'answered';
+
+/** Người dùng gửi một câu hỏi từ widget trên trang bất kỳ. */
+export interface AskQuestionMsg {
+  type: 'ask_question';
+  tabId: number;
+  questionId: string;
+  url: string;
+  title: string;
+  /** Câu hỏi người dùng gõ. */
+  text: string;
+  /** Đoạn người dùng CHỦ ĐỘNG bôi đen. Không bao giờ là nội dung trang tự lấy. */
+  selection?: string;
+  ts: number;
+}
+
+/**
+ * Widget vừa khởi động (mở panel, hoặc content script sống lại sau F5) → xin
+ * phần chưa giao. Không có message này thì mọi câu trả lời về đúng lúc trang
+ * đang tải lại đều rơi mất, và người dùng không có cách nào biết.
+ */
+export interface AskHelloMsg {
+  type: 'ask_hello';
+  tabId: number;
+  url: string;
+}
+
+/** Widget xác nhận đã hiển thị câu trả lời — server mới được dọn. */
+export interface AskDeliveredMsg {
+  type: 'ask_delivered';
+  tabId: number;
+  questionId: string;
+}
+
+/** Người dùng rút lại câu hỏi trước khi có ai trả lời. */
+export interface AskCancelMsg {
+  type: 'ask_cancel';
+  tabId: number;
+  questionId: string;
+}
+
 export type ExtensionToServerMsg =
   | SiteAnnounceMsg
   | DeclarativeSnapshotMsg
   | DeclarativeDeltaMsg
   | ActionResultMsg
   | SiteGoneMsg
+  | AskQuestionMsg
+  | AskHelloMsg
+  | AskDeliveredMsg
+  | AskCancelMsg
   | PongMsg;
 
 // ---------------------------------------------------------------------------
@@ -281,7 +362,50 @@ export interface PingMsg {
   type: 'ping';
 }
 
-export type ServerToExtensionMsg = ExecuteActionMsg | ReadResourceMsg | PingMsg;
+/**
+ * Một phiên agent đã nhận câu hỏi này.
+ *
+ * Nấc trạng thái rẻ nhất mà đổi cảm giác chờ nhiều nhất: người dùng biết có
+ * người đang xử lý, khác hẳn với việc nhìn một vòng xoay không biết còn ai
+ * ở đầu bên kia không.
+ */
+export interface AskClaimedMsg {
+  type: 'ask_claimed';
+  tabId: number;
+  questionId: string;
+}
+
+/** Câu trả lời cuối cùng. Widget phải hồi `ask_delivered`. */
+export interface AskAnswerMsg {
+  type: 'ask_answer';
+  tabId: number;
+  questionId: string;
+  markdown: string;
+}
+
+/** Agent hỏi ngược người dùng khi câu hỏi thiếu ngữ cảnh. */
+export interface AskFollowupMsg {
+  type: 'ask_followup';
+  tabId: number;
+  questionId: string;
+  text: string;
+}
+
+/** Câu hỏi hết hạn claim và quay lại hàng đợi — widget lùi trạng thái tương ứng. */
+export interface AskReleasedMsg {
+  type: 'ask_released';
+  tabId: number;
+  questionId: string;
+}
+
+export type ServerToExtensionMsg =
+  | ExecuteActionMsg
+  | ReadResourceMsg
+  | AskClaimedMsg
+  | AskAnswerMsg
+  | AskFollowupMsg
+  | AskReleasedMsg
+  | PingMsg;
 
 // ---------------------------------------------------------------------------
 // Tiện ích dùng chung

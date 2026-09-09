@@ -7,6 +7,8 @@ import {
 import type {
   ActionStep,
   AfterActionReply,
+  AskContentToSw,
+  AskSwToContent,
   ContentToSw,
   PageInfo,
   PlanReply,
@@ -63,6 +65,42 @@ chrome.runtime.onMessage.addListener((msg: PopupToSw, sender, sendResponse) => {
     return true;
   }
   return;
+});
+
+/**
+ * Kênh Ask — chỉ chuyển tiếp, không giữ trạng thái.
+ *
+ * SW cố tình không nhớ câu hỏi nào đang chờ: MV3 giết service worker bất cứ lúc
+ * nào, nên mọi thứ nó nhớ đều là thứ sẽ mất. Nguồn sự thật nằm ở server
+ * (`AskStore`), bản sao để hiển thị nằm ở `chrome.storage.local` của widget.
+ */
+chrome.runtime.onMessage.addListener((msg: AskContentToSw, sender) => {
+  const tabId = sender.tab?.id;
+  if (tabId === undefined || !msg?.type?.startsWith('cs_ask_')) return;
+
+  switch (msg.type) {
+    case 'cs_ask_send':
+      link.send({
+        type: 'ask_question',
+        tabId,
+        questionId: msg.questionId,
+        url: msg.url,
+        title: msg.title,
+        text: msg.text,
+        selection: msg.selection,
+        ts: Date.now(),
+      });
+      break;
+    case 'cs_ask_hello':
+      link.send({ type: 'ask_hello', tabId, url: msg.url });
+      break;
+    case 'cs_ask_delivered':
+      link.send({ type: 'ask_delivered', tabId, questionId: msg.questionId });
+      break;
+    case 'cs_ask_cancel':
+      link.send({ type: 'ask_cancel', tabId, questionId: msg.questionId });
+      break;
+  }
 });
 
 chrome.runtime.onMessage.addListener((msg: ContentToSw, sender) => {
@@ -146,6 +184,22 @@ function handleServerMessage(msg: ServerToExtensionMsg): void {
     case 'execute_action':
       void executeAction(msg.tabId, msg.actionId, msg.tool, msg.args, msg.waitTimeoutMs);
       break;
+    case 'ask_claimed':
+      void toAsk(msg.tabId, { type: 'sw_ask_claimed', questionId: msg.questionId });
+      break;
+    case 'ask_released':
+      void toAsk(msg.tabId, { type: 'sw_ask_released', questionId: msg.questionId });
+      break;
+    case 'ask_followup':
+      void toAsk(msg.tabId, {
+        type: 'sw_ask_followup',
+        questionId: msg.questionId,
+        text: msg.text,
+      });
+      break;
+    case 'ask_answer':
+      void deliverAnswer(msg.tabId, msg.questionId, msg.markdown);
+      break;
     case 'read_resource':
       // TODO(M3): đọc resource qua content script.
       link.send({
@@ -158,6 +212,48 @@ function handleServerMessage(msg: ServerToExtensionMsg): void {
       break;
   }
 }
+
+/**
+ * Đẩy một message của kênh Ask xuống widget.
+ *
+ * Nuốt lỗi có chủ ý: tab có thể vừa đóng, vừa điều hướng, hoặc đang ở trang mà
+ * content script không chạy được (chrome://, Web Store). Không tab nào trong số
+ * đó là sự cố cần báo — và ném lỗi ở đây sẽ giết cả vòng xử lý message.
+ */
+function toAsk(tabId: number, msg: AskSwToContent): Promise<void> {
+  return chrome.tabs.sendMessage(tabId, msg).catch(() => {});
+}
+
+/**
+ * Câu trả lời về tới nơi. Nếu tab đang ẩn thì phải kêu — người dùng gần như
+ * chắc chắn đã chuyển đi làm việc khác trong lúc chờ, và một câu trả lời nằm im
+ * trong tab nền thì coi như chưa từng tới.
+ */
+async function deliverAnswer(tabId: number, questionId: string, markdown: string): Promise<void> {
+  await toAsk(tabId, { type: 'sw_ask_answer', questionId, markdown });
+
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (!tab || tab.active) return;
+
+  await chrome.action.setBadgeText({ tabId, text: '1' }).catch(() => {});
+  await chrome.action.setBadgeBackgroundColor({ tabId, color: '#e5484d' }).catch(() => {});
+  chrome.notifications?.create({
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icon128.png'),
+    title: 'Trợ lý Live MCP đã trả lời',
+    message: markdown.replace(/\s+/g, ' ').slice(0, 180),
+  });
+}
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== 'open-ask') return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id !== undefined) await toAsk(tab.id, { type: 'sw_ask_open' });
+});
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  void chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
+});
 
 /** Nhịp nghỉ giữa hai bước thao tác — vừa giống người, vừa cho trang kịp phản ứng. */
 const STEP_GAP_MS = 30;

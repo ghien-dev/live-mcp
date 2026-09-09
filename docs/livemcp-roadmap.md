@@ -223,7 +223,10 @@ Kiến trúc §5.5. Con ong bay tới vị trí, chân trái/phải theo click, 
 ### M7 — Đóng gói & phát hành · **M** · ưu tiên 6
 
 1. `npx livemcp-server` installer; onboarding extension.
-2. Streamable HTTP transport (kiến trúc §2.5) — hiện `--http` chỉ báo lỗi.
+2. ~~Streamable HTTP transport (kiến trúc §2.5)~~ **✅ xong** — `--http` bật THÊM
+   transport HTTP bên cạnh stdio (không loại trừ nhau: cả hai cùng cần WS hub 8787).
+   Cửa vào ba lớp ở `packages/server/src/http/guard.ts`: Origin chặn trình duyệt,
+   Host chặn DNS rebinding, Bearer xác thực. Hướng dẫn Cloudflare Tunnel ở README.
 3. Tài liệu người dùng, gồm **ghi rõ ranh giới sản phẩm**: banner debugger không tắt được; một số site chống bot sẽ chặn agent (quyết định có ý thức ở [`consult/Q01`](consult/Q01-focus-thay-click.md) câu 3, không phải thiếu sót).
 
 ---

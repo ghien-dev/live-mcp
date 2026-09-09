@@ -8,15 +8,21 @@ import {
 } from '@livemcp/protocol';
 import type { ExtensionBridge } from '../bridge/hub.js';
 import type { SessionStore, SiteSession } from '../store/sessions.js';
+import type { AskStore } from '../store/ask.js';
 import { resourceDeclToMcpTool, toolDeclToMcpTool, type McpToolShape } from '../parser/tools.js';
 import { callSystemTool, isSystemTool, systemToolShapes } from './systemTools.js';
+import { askToolShapes, callAskTool, isAskTool } from './askTools.js';
 import { isValidToolName, scrubStructured, scrubWebText, toAgentText } from './agentText.js';
 import { log } from '../log.js';
 
 /** Gộp nhiều thay đổi declarative liên tiếp thành một thông báo cho agent. */
 const LIST_CHANGED_DEBOUNCE_MS = 100;
 
-export function createMcpServer(store: SessionStore, bridge: ExtensionBridge): Server {
+export function createMcpServer(
+  store: SessionStore,
+  bridge: ExtensionBridge,
+  askStore: AskStore,
+): Server {
   const server = new Server(
     { name: 'livemcp', version: '0.1.0' },
     { capabilities: { tools: { listChanged: true } } },
@@ -32,6 +38,9 @@ export function createMcpServer(store: SessionStore, bridge: ExtensionBridge): S
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
 
+    if (isAskTool(name)) {
+      return textResult(await callAskTool(name, args, askStore));
+    }
     if (isSystemTool(name)) {
       return textResult(await callSystemTool(name, args, store));
     }
@@ -40,7 +49,7 @@ export function createMcpServer(store: SessionStore, bridge: ExtensionBridge): S
 
   // --- notifications/tools/list_changed ------------------------------------
   let debounce: NodeJS.Timeout | null = null;
-  store.onChange(() => {
+  const unsubscribe = store.onChange(() => {
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(() => {
       debounce = null;
@@ -51,11 +60,26 @@ export function createMcpServer(store: SessionStore, bridge: ExtensionBridge): S
     }, LIST_CHANGED_DEBOUNCE_MS);
   });
 
+  /**
+   * Gỡ đăng ký khi phiên đóng.
+   *
+   * Với stdio, server sống bằng tuổi tiến trình nên việc này không đổi gì. Với
+   * HTTP thì mỗi lần claude.ai nối lại là một `Server` mới: không gỡ ở đây thì
+   * mỗi lần reconnect để lại một listener gọi `sendToolListChanged` trên một
+   * server đã chết, và số listener chỉ có tăng.
+   */
+  server.onclose = () => {
+    unsubscribe();
+    if (debounce) clearTimeout(debounce);
+  };
+
   return server;
 }
 
 function collectTools(store: SessionStore): McpToolShape[] {
-  const tools: McpToolShape[] = [...systemToolShapes];
+  // Tool kênh Ask luôn có mặt, kể cả khi chưa có trang chuẩn Live MCP nào mở:
+  // widget trợ lý chạy trên mọi trang, không phụ thuộc site khai báo declarative.
+  const tools: McpToolShape[] = [...systemToolShapes, ...askToolShapes];
   for (const session of store.list()) {
     for (const decl of session.tools.values()) {
       // Tên tool cũng do trang đặt và đi thẳng vào tools/list. Tên lạ bị loại

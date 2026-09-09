@@ -63,4 +63,35 @@ $<HTMLButtonElement>('save').addEventListener('click', async () => {
   }, 600);
 });
 
+// ---------------------------------------------------------------------------
+// Widget hỏi trợ lý — công tắc tổng + gỡ các lần tắt theo từng trang
+// ---------------------------------------------------------------------------
+
+const GLOBAL_KEY = 'ask_global_enabled';
+const ORIGIN_PREFIX = 'ask_enabled:';
+
+async function refreshAsk(): Promise<void> {
+  const box = $<HTMLInputElement>('askOn');
+  const stored = await chrome.storage.local.get(GLOBAL_KEY);
+  box.checked = stored[GLOBAL_KEY] !== false;
+}
+
+$<HTMLInputElement>('askOn').addEventListener('change', (e) => {
+  void chrome.storage.local.set({ [GLOBAL_KEY]: (e.target as HTMLInputElement).checked });
+});
+
+/**
+ * "Tắt ở trang này" trong widget là một cánh cửa một chiều nếu không có nút này:
+ * widget đã biến mất thì không còn chỗ nào để bật lại nó.
+ */
+$<HTMLButtonElement>('askReset').addEventListener('click', async () => {
+  const all = await chrome.storage.local.get(null);
+  const off = Object.keys(all).filter((k) => k.startsWith(ORIGIN_PREFIX) && all[k] === false);
+  if (off.length) await chrome.storage.local.remove(off);
+  $<HTMLDivElement>('askSaved').textContent = off.length
+    ? `Đã bật lại ở ${off.length} trang.`
+    : 'Không có trang nào đang tắt riêng.';
+});
+
 void refresh();
+void refreshAsk();

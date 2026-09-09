@@ -47,12 +47,14 @@ const entries = [
   { in: join(ROOT, 'src/sw/index.ts'), out: join(DIST, 'sw.js') },
   { in: join(ROOT, 'src/content/index.ts'), out: join(DIST, 'content.js') },
   { in: join(ROOT, 'src/popup/index.ts'), out: join(DIST, 'popup.js') },
+  { in: join(ROOT, 'src/ask/index.ts'), out: join(DIST, 'ask.js') },
 ];
 
 async function copyStatic() {
   await mkdir(DIST, { recursive: true });
   await copyFile(join(ROOT, 'manifest.json'), join(DIST, 'manifest.json'));
   await copyFile(join(ROOT, 'src/popup/popup.html'), join(DIST, 'popup.html'));
+  await copyFile(join(ROOT, 'icon128.png'), join(DIST, 'icon128.png'));
 }
 
 await rm(DIST, { recursive: true, force: true });

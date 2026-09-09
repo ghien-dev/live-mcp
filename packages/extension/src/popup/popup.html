@@ -32,6 +32,13 @@
       code { font-family: ui-monospace, Consolas, monospace; }
       .saved { margin-top: 8px; color: #1e9e52; font-weight: 600; }
       .saved:empty { margin: 0; }
+      hr { border: 0; border-top: 1px solid #8883; margin: 14px 0 12px; }
+      .row { display: flex; align-items: center; gap: 8px; }
+      .row label { margin: 0; flex: 1; font-weight: 600; }
+      .ghost {
+        margin-top: 8px; background: transparent; color: inherit;
+        border: 1px solid #8886; font-weight: 500;
+      }
     </style>
   </head>
   <body>
@@ -47,6 +54,15 @@
            placeholder="dán token từ Local Server" />
     <button id="save">Lưu &amp; kết nối lại</button>
     <div class="saved" id="saved"></div>
+
+    <hr />
+
+    <div class="row">
+      <label for="askOn">Widget hỏi trợ lý</label>
+      <input id="askOn" type="checkbox" style="width:auto" />
+    </div>
+    <button id="askReset" class="ghost">Bật lại ở những trang đã tắt riêng</button>
+    <div class="saved" id="askSaved"></div>
 
     <p class="hint">
       Local Server in token ra lúc khởi động, và lưu tại

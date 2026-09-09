@@ -106,3 +106,39 @@ export interface AfterActionReply {
   goneTools?: string[];
   error?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Kênh Ask ↔ Service Worker
+// ---------------------------------------------------------------------------
+
+/**
+ * Widget trợ lý chạy trong một content script RIÊNG (`ask.js`), không dùng chung
+ * bundle với scanner declarative.
+ *
+ * Tách vì hai thứ có điều kiện sống khác nhau: scanner chỉ có việc trên trang
+ * khai báo `<meta name="livemcp">`, còn widget phải có mặt trên mọi trang. Gộp
+ * lại thì mỗi lần sửa widget là một lần có nguy cơ làm gãy đường declarative —
+ * thứ đang chạy đúng và có lưới E2E bảo vệ.
+ */
+export type AskContentToSw =
+  | {
+      type: 'cs_ask_send';
+      questionId: string;
+      url: string;
+      title: string;
+      text: string;
+      /** Đoạn người dùng CHỦ ĐỘNG bôi đen. Không bao giờ là nội dung trang tự lấy. */
+      selection?: string;
+    }
+  /** Widget vừa dựng lại (mở tab, F5) → xin phần chưa nhận được. */
+  | { type: 'cs_ask_hello'; url: string }
+  | { type: 'cs_ask_delivered'; questionId: string }
+  | { type: 'cs_ask_cancel'; questionId: string };
+
+export type AskSwToContent =
+  /** Phím tắt Alt+A — mở panel và kéo theo đoạn đang bôi đen, nếu có. */
+  | { type: 'sw_ask_open' }
+  | { type: 'sw_ask_claimed'; questionId: string }
+  | { type: 'sw_ask_answer'; questionId: string; markdown: string }
+  | { type: 'sw_ask_followup'; questionId: string; text: string }
+  | { type: 'sw_ask_released'; questionId: string };
