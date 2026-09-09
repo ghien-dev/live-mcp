@@ -14,11 +14,17 @@ bằng chuột và bàn phím thật (trusted events qua CDP), không gọi Java
 đã thông; form điền được đủ loại ô bằng bàn phím thật, mọi sự kiện `isTrusted: true`.
 Hub có token pairing + chặn origin web, và mọi text từ trang tới agent đi qua đúng một cửa.
 
+**Ngoài lộ trình, đã xong:** kênh Ask (widget hỏi trợ lý trên mọi trang) và
+Streamable HTTP (cắm được claude.ai). Cả hai **chưa có ca E2E nào** — xem
+[`docs/livemcp-roadmap.md`](docs/livemcp-roadmap.md) mục 4.
+
 **Luận điểm trung tâm đã chứng minh được:** agent gọi một tool → đợi → **nhận tool mới
 sinh ra từ DOM mới** → gọi tiếp, không cần biết trước gì về chúng. Xem
 `packages/demo-site/dynamic.html`. Lưới E2E: 30 bài trên Chrome thật, ba locale.
 
-Milestone tiếp theo và thứ tự ưu tiên: [`docs/livemcp-roadmap.md`](docs/livemcp-roadmap.md).
+**Kế tiếp:** M4 phần A (confirm gate + rate limit — đã đổi mức ưu tiên vì `--http`
+mở endpoint ra internet), rồi M2.5 chạm thực địa. Thứ tự và lý do:
+[`docs/livemcp-roadmap.md`](docs/livemcp-roadmap.md).
 
 | Package | Vai trò |
 |---|---|

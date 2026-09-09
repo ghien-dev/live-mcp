@@ -117,9 +117,84 @@ Lý do không tạo N server cho N tab: Claude Desktop/agent cấu hình MCP ser
 
 ### 2.5 Server expose MCP qua cả stdio và Streamable HTTP
 
+> **Sửa ngày 09/09/2026 — hai transport là quan hệ CỘNG, không phải quan hệ HOẶC.**
+> Bản đầu của mục này liệt kê stdio và HTTP như hai lựa chọn, và mã lần đầu hiện
+> thực đúng như vậy: `--http` loại trừ `--stdio`. Sai, và cái sai lộ ra ngay khi
+> dùng thật — cả hai transport đều cần **cùng một WS hub 8787**, mà cổng đó chỉ
+> một tiến trình giữ được. Nghĩa là "chọn một trong hai" không phải một lựa chọn
+> cấu hình, nó là *"hôm nay bạn chỉ được dùng Claude Code hoặc claude.ai"*. Nay
+> `--http` **bật thêm** HTTP bên cạnh stdio trong cùng tiến trình.
+
 - **stdio**: để khai báo trong config Claude Desktop / Claude Code (cách phổ biến nhất hiện nay).
-- **Streamable HTTP (127.0.0.1)**: cho agent khác kết nối. Dùng `@modelcontextprotocol/sdk` (TypeScript) — có sẵn cả hai transport + `tools/list_changed`.
+- **Streamable HTTP**: `POST /mcp`, mặc định `127.0.0.1:8788`, bật bằng `--http`. Dùng `@modelcontextprotocol/sdk` (TypeScript) — có sẵn cả hai transport + `tools/list_changed`.
 - Quan trọng: server phải hỗ trợ **dynamic tool list** và bắn `notifications/tools/list_changed` mỗi khi declarative thay đổi — đây là xương sống của mẫu "hành động → đợi → tool mới".
+
+**Mỗi kết nối HTTP là một `Server` mới, và điều đó sinh ra một lớp rò rỉ không có
+ở stdio.** Với stdio, `Server` sống bằng tuổi tiến trình nên đăng ký
+`store.onChange` một lần là xong. Với HTTP, mỗi lần claude.ai nối lại là một
+`Server` mới đăng ký thêm một listener; không gỡ ở `server.onclose` thì số
+listener chỉ có tăng, mỗi cái gọi `sendToolListChanged` trên một server đã chết.
+
+**Ba lớp cửa vào** (`server/src/http/guard.ts`), mỗi lớp chặn một thứ khác nhau —
+đây là lý do không lớp nào thay được lớp nào:
+
+| Lớp | Chặn gì | Vì sao không bỏ được |
+|---|---|---|
+| `Origin` | trình duyệt | không client MCP hợp lệ nào chạy trong trang web |
+| `Host` | DNS rebinding | tên miền của kẻ tấn công trỏ về `127.0.0.1` |
+| `Authorization: Bearer` | mọi thứ đến từ internet qua tunnel | Origin/Host không có ý nghĩa với client không phải trình duyệt |
+
+**Token HTTP tách khỏi token pairing WS**, cố ý không dùng chung giá trị: token
+pairing chỉ nằm trên máy này, còn token HTTP đi qua tunnel và nằm trong cấu hình
+của một dịch vụ bên ngoài. Dùng chung thì lộ cái sau là mất luôn cái trước, và
+xoay một cái bắt xoay cả cái kia.
+
+`--http-no-auth` (cho trường hợp Cloudflare Access đã chắn phía trước) **cảnh báo
+to mỗi lần khởi động**. Đây là N2 áp lên cấu hình chứ không lên mã: một endpoint
+không xác thực mà im lặng chạy được là thứ không ai phát hiện ra cho tới lúc đã muộn.
+
+---
+
+### 2.6 Kênh Ask chạy song song, không đi qua đường declarative
+
+*(Thêm ngày 09/09/2026 — tính năng làm ngoài lộ trình, xem `livemcp-roadmap.md`.)*
+
+Widget "hỏi trợ lý" nổi trên **mọi** trang: người dùng bôi đen một đoạn hoặc gõ
+một câu, agent trả lời ngay tại tab đó. Nó dùng chung WS hub và chung tiến trình
+server với đường declarative, nhưng **không dùng chung gì khác** — và ranh giới
+đó là quyết định kiến trúc, không phải chi tiết cài đặt:
+
+- **Content script riêng (`ask.js`), không gộp vào bundle scanner.** Hai thứ có
+  điều kiện sống khác nhau: scanner chỉ có việc trên trang khai `<meta name="livemcp">`,
+  widget phải có mặt khắp nơi. Gộp lại thì mỗi lần sửa widget là một lần có nguy
+  cơ làm gãy đường declarative — thứ đang chạy đúng và có lưới E2E bảo vệ.
+- **Không đụng `SessionStore`.** Câu hỏi sống trong `AskStore` riêng; tool kênh
+  Ask có mặt trong `tools/list` kể cả khi chưa có trang chuẩn nào mở.
+- **Service worker không giữ trạng thái kênh Ask** — chỉ chuyển tiếp. MV3 giết SW
+  bất cứ lúc nào, nên mọi thứ nó nhớ đều là thứ sẽ mất. Nguồn sự thật ở server,
+  bản sao để hiển thị ở `chrome.storage.local` của widget.
+- **Widget không bao giờ tự đọc nội dung trang.** Chỉ gửi câu người dùng gõ và
+  đoạn họ chủ động bôi đen. Cần thêm ngữ cảnh thì agent phải hỏi ngược bằng
+  `livemcp_ask_followup` — tức là người dùng vẫn là người quyết định cái gì rời trang.
+
+**Đảo chiều so với phần còn lại của hệ:** ở đường declarative, agent là bên chủ
+động gọi. Ở kênh Ask, **người dùng** là bên chủ động và agent là bên chờ. Đó là
+lý do `livemcp_ask_wait` **chặn** (tới 55s) thay vì trả về ngay: agent gọi một
+lần rồi tự lặp, người dùng không phải nhắc lại từng câu. 55s nhắm dưới timeout
+tool-call ~60s của claude.ai — vượt trần thì client bỏ cuộc trước server và agent
+nhận một lỗi transport không nói gì, mất luôn khả năng lặp vòng.
+
+**Ba trạng thái, không phải hai.** `pending → claimed → answered`, cộng một cờ
+`delivered` riêng. `claimed` tồn tại vì nó là nấc rẻ nhất mà đổi cảm giác chờ
+nhiều nhất: người dùng biết có ai đó đang xử lý. `delivered` tách khỏi `answered`
+vì agent trả lời xong **không** có nghĩa widget đã nhận — tab có thể đang F5 đúng
+lúc đó; widget gửi `ask_hello` khi dựng lại và server giao lại phần chưa nhận.
+
+**Claim có TTL (180s) và có nhịp sweep chủ động (15s).** Phiên claude.ai biến mất
+giữa chừng mà không ai báo (đóng tab, hết context) là chuyện thường. Không TTL thì
+câu hỏi khoá vĩnh viễn ở "đang xử lý". Và sweep phải **chủ động** chứ không dọn
+lười lúc đọc: khi một claim hết hạn, phải có ai đó đánh thức `ask_wait` đang chặn
+ở phiên khác — dọn lười thì mọi phiên cùng chặn và không lượt gọi nào tới để dọn.
 
 ---
 
@@ -152,6 +227,26 @@ JSON messages qua `ws://127.0.0.1:8787`. Định nghĩa tối thiểu v1:
 
 // Tab đóng / rời trang
 { "type": "site_gone", "tabId": 12 }
+
+// --- Kênh Ask (chạy trên MỌI trang, không cần meta livemcp) ---
+
+// Người dùng gửi một câu hỏi từ widget
+{ "type": "ask_question", "tabId": 12, "questionId": "q-7a3f",
+  "url": "https://vnexpress.net/...", "title": "...",
+  "text": "đoạn này nói gì vậy?",
+  "selection": "…đoạn người dùng CHỦ ĐỘNG bôi đen…",   // không bao giờ tự lấy
+  "ts": 1757400000000 }
+
+// Widget vừa dựng lại (mở panel, hoặc content script sống lại sau F5)
+// → xin phần chưa giao. Không có message này thì mọi câu trả lời về đúng
+//   lúc trang đang tải lại đều rơi mất, và không ai biết.
+{ "type": "ask_hello", "tabId": 12, "url": "https://..." }
+
+// Widget xác nhận đã hiển thị câu trả lời — server mới được dọn
+{ "type": "ask_delivered", "tabId": 12, "questionId": "q-7a3f" }
+
+// Người dùng rút lại câu hỏi trước khi có ai trả lời
+{ "type": "ask_cancel", "tabId": 12, "questionId": "q-7a3f" }
 ```
 
 ### 3.2 Server → Extension
@@ -168,7 +263,26 @@ JSON messages qua `ws://127.0.0.1:8787`. Định nghĩa tối thiểu v1:
 
 // Ping keepalive (giữ MV3 SW sống)
 { "type": "ping" }
+
+// --- Kênh Ask ---
+
+// Một phiên agent đã nhận câu hỏi này
+{ "type": "ask_claimed", "tabId": 12, "questionId": "q-7a3f" }
+
+// Câu trả lời cuối cùng. Widget PHẢI hồi ask_delivered.
+{ "type": "ask_answer", "tabId": 12, "questionId": "q-7a3f", "markdown": "..." }
+
+// Agent hỏi ngược khi câu hỏi thiếu ngữ cảnh
+{ "type": "ask_followup", "tabId": 12, "questionId": "q-7a3f", "text": "bạn đang xem mục nào?" }
+
+// Claim hết hạn, câu hỏi quay lại hàng đợi — widget lùi trạng thái
+{ "type": "ask_released", "tabId": 12, "questionId": "q-7a3f" }
 ```
+
+Bốn message kênh Ask đi bằng `bridge.sendToTab()` chứ không bằng `dispatch()`:
+ở đây **không có cặp request/response**. Xác nhận đi đường riêng (`ask_delivered`)
+vì widget có thể đang tải lại trang đúng lúc câu trả lời tới — chờ đồng bộ tại
+chỗ gửi sẽ chỉ sinh ra timeout giả.
 
 ### 3.3 Cấu trúc `ToolDecl` (content script sinh ra, server chỉ việc map sang MCP)
 
@@ -310,6 +424,23 @@ new MutationObserver(muts => scheduleRescan(muts)).observe(document.documentElem
 5. **Từ chối type vào `input[type=password]`** trừ khi user bật rõ trong settings.
 6. Rate limit hành động (mặc định ~2 action/giây/tab) — vừa an toàn vừa khớp nhịp con ong. *(M4)*
 
+> **Sửa lần hai, 09/09/2026 — bề mặt tấn công vừa nở ra, và phép thử hai vế của
+> M1.5 nay cho kết quả khác cho mục 2/3/6.** Phép thử đó là: việc nào *(rẻ ∧ đóng
+> lỗ đang mở hôm nay)* thì làm ngay, việc nào *(đắt ∨ bảo vệ người chưa tồn tại)*
+> thì để M4. Hai thứ vừa làm xong đổi vế cho một phần M4:
+>
+> - **`--http` + tunnel đưa endpoint MCP ra internet.** Ba lớp cửa ở §2.5 chặn
+>   *ai vào được*, nhưng không chặn *vào rồi làm được gì*. Ai qua cửa là điều
+>   khiển được trình duyệt của chủ máy, không giới hạn tốc độ, không xác nhận.
+> - **Kênh Ask là một đường text hai chiều mới từ trang tới agent**, chạy trên
+>   *mọi* trang chứ không chỉ trang đã khai declarative. Text đã đi qua đúng một
+>   cửa `toAgentText()` (mục 4) nên phần *xác suất* có được chăm, nhưng phần
+>   *trần thiệt hại* thì vẫn y nguyên — mà đó mới là phần quyết định.
+>
+> Kết luận: **confirm gate (mục 3) và rate limit (mục 6) không còn là "bảo vệ
+> người dùng tương lai"** — chúng bảo vệ chủ dự án, hôm nay, mỗi lần bật `--http`.
+> Origin allowlist (mục 2) vẫn ở M4. Xem `livemcp-roadmap.md` mục M4.
+
 ### 6.4 Tool hệ thống (server tự expose, không đến từ web)
 
 | Tool | Công dụng |
@@ -319,6 +450,18 @@ new MutationObserver(muts => scheduleRescan(muts)).observe(document.documentElem
 | `livemcp_wait(site, selector?, timeoutMs)` | Cho agent chủ động đợi thêm (học "cách đợi của Playwright") |
 | `livemcp_read_page(site)` | Đọc toàn bộ resource + trạng thái các vùng `livemcp-state` — "con mắt" tổng của agent |
 
+**Tool kênh Ask** (§2.6) — luôn có mặt, kể cả khi chưa trang chuẩn nào mở:
+
+| Tool | Công dụng |
+|---|---|
+| `livemcp_ask_wait(timeoutMs?)` | **Chặn** tới 55s chờ câu hỏi kế tiếp, rồi claim nó. Đây là chỗ agent tự lặp vòng. |
+| `livemcp_ask_list()` | Xem hàng đợi mà không claim — dùng để nhìn, không dùng để lặp |
+| `livemcp_ask_answer(questionId, markdown)` | Trả lời; câu trả lời về đúng tab đã hỏi |
+| `livemcp_ask_followup(questionId, text)` | Hỏi ngược người dùng khi thiếu ngữ cảnh |
+
+Mọi text của câu hỏi đi qua `toAgentText()` / `scrubWebText()` như mọi text khác
+từ web (§6.3 mục 4) — kênh mới **không** được mở thêm một cửa thứ hai.
+
 ---
 
 ## 7. Cấu trúc repo đề xuất (monorepo)
@@ -327,14 +470,17 @@ new MutationObserver(muts => scheduleRescan(muts)).observe(document.documentElem
 livemcp/
 ├── packages/
 │   ├── server/            # Local Server (Node + TS)
-│   │   ├── src/mcp/       # MCP transports, dynamic registry
+│   │   ├── src/mcp/       # MCP transports, dynamic registry, tool hệ thống + kênh Ask
+│   │   ├── src/http/      # Streamable HTTP + guard 3 lớp (§2.5)
 │   │   ├── src/bridge/    # WS hub + protocol messages
 │   │   ├── src/parser/    # ToolDecl → MCP schema
-│   │   └── src/policy/    # confirm gate, sanitizer, allowlist
+│   │   ├── src/store/     # session state, token, hàng đợi Ask
+│   │   └── src/policy/    # confirm gate, sanitizer, allowlist  (M4, chưa có)
 │   ├── extension/         # Chrome Extension MV3
 │   │   ├── src/sw/        # service worker: WS client, CDP executor, tab mgr
 │   │   ├── src/content/   # scanner, observer, waiter, reader, coordinator
-│   │   ├── src/bee/       # 🐝 overlay (SVG + Web Animations)
+│   │   ├── src/ask/       # widget hỏi trợ lý — content script RIÊNG (§2.6)
+│   │   ├── src/bee/       # 🐝 overlay (SVG + Web Animations)  (M5, chưa có)
 │   │   └── manifest.json
 │   ├── protocol/          # Types chung: ToolDecl, WS messages (share server+extension)
 │   └── demo-site/         # Trang demo đạt chuẩn (kiêm test bed): shop + dropdown + canvas mẫu A/B/C

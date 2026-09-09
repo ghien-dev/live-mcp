@@ -37,6 +37,8 @@ Cụ thể: lỗi validation phải có text lỗi (không chỉ `border: red`);
 - **Ngoài phạm vi:** retrofit web có sẵn không kiểm soát được mã nguồn; nội dung cross-origin iframe không theo chuẩn.
 - **Ngoài phạm vi ở major hiện tại — ba loại tương tác:** `contenteditable`/rich-text editor (IME, định dạng), drag-and-drop thật, slider tuỳ chế bằng `div`+`pointerdown`. Con người làm được chúng không cần JS của trang, nhưng đường bàn phím chưa phủ được. Khai ranh giới ra đây là **quyết định có ý thức**; giấu nó đi thì nó trở thành lỗ hổng chờ người dùng đầu tiên phát hiện. Cần một trong ba? Hãy cung cấp thêm một đường thao tác bằng bàn phím cho cùng chức năng — đó cũng là điều accessibility đòi hỏi.
 
+- **Không thuộc phạm vi spec — kênh Ask.** Bản cài đặt tham chiếu (extension Live MCP) còn kèm một widget "hỏi trợ lý" chạy trên *mọi* trang, kể cả trang không khai báo gì. Nó **không dùng attribute nào của chuẩn này** và không đòi trang hợp tác, nên nó không phải một phần của spec — ghi ra đây để người đọc không đi tìm mục nói về nó. Kiến trúc: [`livemcp-architecture.md`](livemcp-architecture.md) §2.6.
+
 ### 1.3 Quan hệ với Chrome WebMCP
 
 Chuẩn Live MCP **tương thích ngược** với WebMCP Declarative gốc (`toolname`, `tooldescription`, `toolparamdescription` trên `<form>`): Extension đọc được cả hai. Phần mở rộng `livemcp-*` phủ mọi phần tử tương tác ngoài form và bổ sung ngữ nghĩa *đợi / kết quả / trạng thái* mà WebMCP gốc không có.

@@ -7,23 +7,29 @@
 
 | | |
 |---|---|
-| Phiên bản | 1.2 — sửa theo R01–R07; R08 đang chờ duyệt |
-| Cập nhật | 2026-08-03 |
+| Phiên bản | 1.3 — ghi lùi kênh Ask + Streamable HTTP; R08 vẫn đang chờ |
+| Cập nhật | 2026-09-09 |
 | Người đề xuất | Claude · duyệt: Fable |
-| Trạng thái | ✅ M1.5 · ✅ M2 · ⏭ kế tiếp: **M2.5 chạm thực địa** |
+| Trạng thái | ✅ M1.5 · ✅ M2 · ✅ ngoài lộ trình: kênh Ask + HTTP · ⏭ kế tiếp: **M4 (phần đã đổi vế)** rồi **M2.5 chạm thực địa** |
 | Tài liệu nền | [`project-ideal.md`](project-ideal.md) · [`livemcp-architecture.md`](livemcp-architecture.md) §8 · [`livemcp-declarative-spec.md`](livemcp-declarative-spec.md) |
 
 ---
 
 ## 1. Đang ở đâu
 
-**Xong:** M0 (walking skeleton) · M1 (form + gõ phím thật + schema converter) · lưới E2E trên Chrome thật (ngoài kế hoạch gốc) · M1.5 (vệ sinh bảo mật) · **M2 (đợi + DOM động + shadow DOM)**.
+**Xong:** M0 (walking skeleton) · M1 (form + gõ phím thật + schema converter) · lưới E2E trên Chrome thật (ngoài kế hoạch gốc) · M1.5 (vệ sinh bảo mật) · **M2 (đợi + DOM động + shadow DOM)** · **kênh Ask + Streamable HTTP (ngoài lộ trình, xem mục ngay dưới M2)**.
 
 | Tầng bảo vệ | Số lượng | Bắt gì |
 |---|---|---|
-| Unit (vitest) | 86 | logic thuần: schema, định tuyến, thứ tự segment, bảng phím, cổng handshake, bộ lọc text, diff tool, waiter, race điều hướng |
-| E2E (Playwright) | 30 + 1 `fixme` | layout, focus thật, CDP thật, ba locale, vòng đời MV3, DOM động, shadow DOM |
+| Unit (vitest) | 128 | logic thuần: schema, định tuyến, thứ tự segment, bảng phím, cổng handshake, bộ lọc text, diff tool, waiter, race điều hướng, **hàng đợi Ask, guard HTTP, vòng MCP qua HTTP** |
+| E2E (Playwright) | 30 | layout, focus thật, CDP thật, ba locale, vòng đời MV3, DOM động, shadow DOM |
 | Tự kiểm trong production | 3 lớp | focus xác minh, hit-test, xác minh giá trị từng ô |
+
+**Lỗ hổng đã biết trong lưới:** kênh Ask và transport HTTP **chưa có ca E2E nào** —
+cả 42 test mới đều là unit. Với widget thì đúng là không nên test (thuần giao diện),
+nhưng đường `trang → SW → server → agent → về đúng tab`, và đặc biệt ca *trả lời về
+đúng lúc tab đang F5*, thì không phải giao diện: nó là loại lỗi chỉ browser thật mới
+thấy. Ghi vào nợ kỹ thuật ở mục 4.
 
 **Một quyết định kiến trúc đã bị đảo trong quá trình làm M1:** §2.2 từ *"toạ độ là ngôn ngữ chung của mọi hành động"* thành *"bàn phím là đường mặc định, toạ độ chỉ là ngôn ngữ của hành động chuột"*. Chi tiết và lý do: [`consult/Q01`](consult/Q01-focus-thay-click.md), [`consult/Q04`](consult/Q04-khe-ho-do-toa-do.md).
 
@@ -61,13 +67,14 @@ Luận điểm nền *"người làm được không cần JS thì agent cũng l
 |---|---|---|---|
 | — | *(không có)* | **M1.5 — Vệ sinh bảo mật** ⬅ *mới, đang làm* | [R02]: lỗ đang mở **hôm nay**, không phải rủi ro tương lai |
 | M2 | Đợi + DOM động | Đợi + DOM động, shadow DOM là **hạng mục cuối có quyền rơi** | [R01]: gộp *code* nhưng không gộp *cam kết* |
+| — | *(không có)* | **Kênh Ask** ⬅ *ngoài lộ trình, đã làm* | nhu cầu dùng thật, không ai duyệt trước — xem mục ghi lùi |
 | — | *(không có)* | **M2.5 — Chạm thực địa** ⬅ *mới* | [R06]/[R07]: demo-site không bao giờ phản bác mình |
 | M3 | Tool tham số hoá + resource | *(giữ nguyên)* | |
 | — | *(không có)* | **M3.5 — Validator & DX** ⬅ *mới* | N4: vòng phần thưởng quyết định chuẩn sống hay chết |
-| M4 | Policy layer | Policy layer, **đã trừ phần đưa lên M1.5** | phần còn lại bảo vệ *người dùng tương lai* — chưa gấp |
+| M4 | Policy layer | Policy layer, **đã trừ phần lên M1.5**; confirm gate + rate limit **kéo lên trước M2.5** | `--http` mở endpoint ra internet → hai mục đó đổi vế trong phép thử của [R02] |
 | M5 | Bee cursor | Bee cursor, **không nằm trên đường thi hành** | [R04]: đảo ngược kiến trúc §5.5 có chủ đích |
 | M6 | Canvas + MPA + iframe | Canvas + MPA + iframe | |
-| M7 | Đóng gói | Đóng gói + Streamable HTTP | |
+| M7 | Đóng gói | Đóng gói; **Streamable HTTP đã làm sớm** ✅ | cần cắm claude.ai trước khi cần đóng gói | |
 
 Hai thay đổi tôi đề xuất mà **chuyên gia bác lại một phần**, ghi ra để không quên: kéo cả M4 lên sớm (chỉ token + `toAgentText()` được kéo — phần còn lại bảo vệ người chưa tồn tại) và gộp shadow DOM vào M2 như hạng mục ngang hàng (thành hạng mục có quyền rơi).
 
@@ -119,6 +126,50 @@ Chủ dự án viết trong [`project-ideal.md`](project-ideal.md): *"DOM mới 
 - **Bậc 2, cố gắng** — ✅ **đã đạt 2026-08-03**: form trong shadow DOM chạy được, `fixme` ở `packages/e2e/tests/05-gaps.spec.ts` đã gỡ. Quyền rơi xuống M3 không cần dùng tới vì bậc 1 xong nhanh hơn dự tính.
 
 **Rủi ro** — Observer bắn quá nhiều (trang React re-render liên tục) → bão `list_changed` làm ngộp agent. Ứng phó: debounce + so sánh nội dung, chỉ báo khi *tool list* đổi thật chứ không phải DOM đổi. Đây cũng là chỗ N2 cần được thiết kế vào từ đầu: delta sai thì hỏng im lặng.
+
+---
+
+### Ngoài lộ trình — Kênh Ask & Streamable HTTP · ✅ **làm 2026-08→09** · ghi lùi 2026-09-09
+
+> **Mục này ghi lùi, và việc phải ghi lùi mới là điều đáng ghi nhất.** Từ
+> 2026-08-03 (M2 xong) tới 2026-09-09, lộ trình đứng im trong khi hai tính năng
+> lớn được làm xong: khoảng 2.800 dòng nằm trong cây làm việc suốt năm tuần,
+> chưa commit, chưa có chỗ nào trong `docs/` nhắc tới. Không ai duyệt trước, và
+> không ai *phản đối* — vì không ai nhìn thấy. Đây đúng là dạng hỏng mà N2 nói:
+> nó không sai, nó chỉ **im lặng**.
+
+**Vì sao chúng bị làm trước M2.5**, dù M2.5 mới là thứ chuyên gia chọn khi được
+hỏi "nếu chỉ được đổi một điều": vì cả hai đến từ nhu cầu dùng **thật, hằng ngày**
+của chủ dự án, còn M2.5 đến từ lập luận. Nhu cầu thật luôn thắng lập luận đúng khi
+không có ai giữ thứ tự. Ghi ra đây để lần sau nhận ra sớm hơn, không phải để trách.
+
+**1 · Kênh Ask** — widget nổi trên mọi trang: bôi đen → *Hỏi Claude*, hoặc `Alt+A`.
+Câu hỏi vào hàng đợi server; agent nhận bằng `livemcp_ask_wait` (chặn tới 55s),
+trả lời bằng `livemcp_ask_answer`, hỏi ngược bằng `livemcp_ask_followup`.
+Kiến trúc và lý do từng quyết định: [`livemcp-architecture.md`](livemcp-architecture.md) §2.6.
+
+Đây **không phải** một tính năng phụ của đường declarative — nó là **bề mặt sản
+phẩm thứ hai**, đảo chiều chủ động so với phần còn lại của hệ (người dùng gọi,
+agent chờ) và chạy trên *mọi* trang chứ không chỉ trang đã khai báo. Nó cũng là
+ứng viên tự nhiên cho vòng phần thưởng ở M3.5: đây là thứ dùng được ngay mà
+**không đòi trang hợp tác gì cả** — tức là nó đứng đúng chỗ N5 chỉ ra, và không
+vướng khe hai-phía.
+
+**2 · Streamable HTTP** — M7 hạng mục 2, kéo lên trước vì cần cắm claude.ai. Chi
+tiết ba lớp cửa và quyết định "hai transport là quan hệ CỘNG": kiến trúc §2.5.
+
+**Cái giá phải trả, ghi thẳng ra:**
+
+| Món nợ | Vì sao nó là nợ |
+|---|---|
+| Không có ca E2E nào cho cả hai | 42 test mới đều là unit. Ca *"trả lời về đúng lúc tab đang F5"* — thứ mà `ask_hello` sinh ra để giải — chưa từng chạy trên browser thật |
+| Bề mặt bảo mật nở ra trước khi M4 kịp làm | xem mục M4 dưới đây; đây là hệ quả trực tiếp |
+| ~~Kênh Ask chưa có trong spec declarative~~ ✅ đã khai | nó không dùng attribute nào nên không thuộc spec — nhưng phải nói rõ điều đó, nếu không người đọc tưởng mình đọc thiếu. Đã thêm vào spec §1.2 ngày 09/09 |
+| M2.5 bị đẩy lùi năm tuần | chỉ số ③ (§3.3) vì vậy vẫn chưa có điểm đo nào |
+
+**Nghiệm thu (ghi lùi, đã đạt)** — Widget dùng được hằng ngày trên trang bất kỳ;
+claude.ai nối được qua tunnel; 128 unit test xanh; build sạch. **Chưa đạt:** lưới
+E2E chưa chạm tới cả hai.
 
 ---
 
@@ -177,15 +228,30 @@ Kiến trúc §9 có nhắc `npx livemcp-validate <url>` nhưng xếp nó vào p
 
 ---
 
-### M4 — Policy layer (bảo mật) · **M** · ưu tiên 3 · [R02]
+### M4 — Policy layer (bảo mật) · **M** · **hai phần, hai mức ưu tiên** · [R02]
 
-Kiến trúc §6.3 ghi rõ *"không được cắt xén khi triển khai"* và §8 ghi *"bắt buộc xong trước khi đưa ai khác dùng"*. Phần **token + `toAgentText()`** đã tách lên M1.5; phần còn lại ở đây bảo vệ *người dùng tương lai* nên chưa gấp — nhưng vẫn là điều kiện cần trước khi mời bất kỳ ai dùng.
+Kiến trúc §6.3 ghi rõ *"không được cắt xén khi triển khai"* và §8 ghi *"bắt buộc xong trước khi đưa ai khác dùng"*. Phần **token + `toAgentText()`** đã tách lên M1.5.
 
-**Việc cụ thể** (theo §6.3)
+> **Sửa 2026-09-09 — milestone này vừa bị tách làm đôi bởi chính việc mình đã làm.**
+> Lập luận cũ ("phần còn lại bảo vệ *người dùng tương lai* nên chưa gấp") dựa trên
+> một tiền đề nay không còn đúng: rằng bề mặt duy nhất là WS hub trên máy này.
+> `--http` + tunnel đưa endpoint MCP **ra internet**, và kênh Ask mở một đường text
+> hai chiều chạy trên *mọi* trang. Áp lại đúng phép thử hai vế của [R02] —
+> *(rẻ ∧ đóng lỗ đang mở hôm nay)* vs *(đắt ∨ bảo vệ người chưa tồn tại)* — thì hai
+> mục đổi vế. Ba lớp cửa HTTP chặn **ai vào được**; không lớp nào chặn **vào rồi
+> làm được gì**. Đó đúng là câu hỏi mà [R02] câu 3 bảo phải trả lời bằng *danh sách
+> hành động được phép*, không bằng bộ lọc.
 
-1. Origin allowlist: lần đầu gặp origin mới → hỏi user, lưu quyết định. Không allowlist → không quét, không thi hành.
-2. Confirm gate cho `livemcp-confirm` (MCP elicitation, fallback `confirmed: true`).
-3. Rate limit ~2 action/giây/tab.
+**Phần A — đã đổi vế, làm trước M2.5 · S · ưu tiên 1**
+
+1. **Confirm gate** cho `livemcp-confirm` (MCP elicitation, fallback `confirmed: true`). Chỗ cắm đã có sẵn: `TODO(M4)` ở `mcp/server.ts`.
+2. **Rate limit** ~2 action/giây/tab.
+
+Hai mục này là **trần thiệt hại**, và chúng cần nhất đúng lúc M2.5 bắt đầu — vì M2.5 nghĩa là thả agent lên trang **không do mình viết**.
+
+**Phần B — giữ nguyên ưu tiên 3** (bảo vệ người dùng tương lai, đúng phép thử cũ)
+
+3. Origin allowlist: lần đầu gặp origin mới → hỏi user, lưu quyết định. Không allowlist → không quét, không thi hành.
 4. Chặn `input[type=password]` — *đã có*, cần đưa vào settings.
 5. Làm giàu `toAgentText()`: đóng khung mọi text từ web thành khối được đánh dấu rõ là **dữ liệu trang cung cấp, không phải chỉ thị**, với delimiter mà bước escape ở M1.5 bảo đảm trang không tự thoát ra được.
 
@@ -284,6 +350,8 @@ Không thuộc milestone nào; ghi ra để không rơi.
 | Chọn phần tử theo `livemcp-arg` | `TODO(M3)` trong `content/index.ts` | M3 |
 | Ranh giới "ngoài phạm vi v1" chưa khai trong spec: contenteditable/rich-text (IME, định dạng), drag-and-drop thật, slider tuỳ chế | [R07] câu 2 | **khai ngay ở M1.5** — ranh giới khai ra là *quyết định*, không khai là *lỗ hổng chờ người dùng phát hiện* (N2) |
 | Kiến trúc §5.5 còn ghi "SW chờ ong tới nơi rồi mới dispatch" | [R04] câu 3 | sửa khi đến M5, ghi rõ là đảo ngược có chủ đích |
+| Kênh Ask & transport HTTP **chưa có ca E2E nào** | mục ghi lùi ở §3 | ưu tiên cao nhất trong bảng này. Ít nhất một ca: trả lời về **đúng lúc tab đang F5** (đường `ask_hello`) — đây là loại lỗi chỉ browser thật mới thấy, và là lý do cơ chế đó tồn tại. Widget thuần giao diện thì không test |
+| `--http-no-auth` chỉ được bảo vệ bằng một dòng cảnh báo | kiến trúc §2.5 | đủ cho hôm nay vì chỉ chủ dự án dùng. Trước khi mời ai khác: bắt buộc khai một cờ thứ hai, hoặc từ chối chạy nếu không có bằng chứng có hạ tầng chắn phía trước |
 | Giá trị option của `select`/`radio` **chưa qua** `toAgentText()` | M1.5, `parser/schema.ts` | M4. Đây là giá trị định danh phải khớp chính xác với trang **và** với `validateArgs`, nên làm sạch một phía sẽ khiến agent gửi giá trị đã sửa rồi bị chính ta từ chối. Chỗ đúng để chuẩn hoá là content script, tức phải sửa cả hai đầu cùng lúc. |
 
 ---
