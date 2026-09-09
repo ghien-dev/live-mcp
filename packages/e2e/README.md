@@ -57,11 +57,20 @@ extension, dù cả hai đều nói CDP.
 | `03-locale` | thứ tự segment ngày trên `en-US` (MDY), `de-DE` (DMY), `ja` (YMD) |
 | `04-lifecycle` | server restart → tự nối lại; đóng tab → tool biến mất; SW còn sống |
 | `05-gaps` | những chỗ **chưa** hỗ trợ, ghi bằng `test.fixme` |
+| `06-dynamic` | tool sinh ra từ DOM mới; đợi bằng `livemcp-wait`; `livemcp-state` kẹt không treo agent |
+| `07-ask` | kênh Ask đi trọn vòng, `ask_wait` chặn thật, và **đo độ trễ** từng chặng |
 
 Khẳng định đáng giá nhất trong `01` là một khẳng định **âm**: sau khi điền xong,
 không tồn tại sự kiện tương tác nào có `isTrusted === false`. Nó bắt được cái
 ngày ai đó thêm một `dispatchEvent` "chỉ lần này thôi" — đúng loại xói mòn triết
 lý mà không review bằng mắt nào thấy.
+
+`07-ask` **đảo vai** so với luật "Playwright dựng rạp, không diễn". Luật đó
+đúng cho đường declarative, nơi *agent* là bên hành động. Kênh Ask thì người dùng
+mới là bên chủ động và agent là bên chờ — nên ở đó Playwright đóng vai người
+dùng và gõ thật bằng `page.keyboard`. Nó cũng phải đọc kết quả qua CDP
+`DOM.getDocument({pierce:true})`, đường duy nhất nhìn xuyên được shadow root
+`mode: 'closed'` của widget.
 
 `05-gaps` dùng `test.fixme`: bài *nên* xanh nhưng hiện đỏ vì tính năng chưa có.
 Playwright sẽ **đỏ ngược lại nếu nó bất ngờ xanh**, nên ngày ai đó làm xong tính

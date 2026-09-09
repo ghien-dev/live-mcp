@@ -162,7 +162,7 @@ tiết ba lớp cửa và quyết định "hai transport là quan hệ CỘNG": 
 
 | Món nợ | Vì sao nó là nợ |
 |---|---|
-| Không có ca E2E nào cho cả hai | 42 test mới đều là unit. Ca *"trả lời về đúng lúc tab đang F5"* — thứ mà `ask_hello` sinh ra để giải — chưa từng chạy trên browser thật |
+| ~~Không có ca E2E nào cho cả hai~~ ⚠ **đã trả một nửa** | `07-ask` phủ kênh Ask (2026-09-09). Transport HTTP vẫn chưa có ca nào, và ca *"trả lời về đúng lúc tab đang F5"* — thứ mà `ask_hello` sinh ra để giải — vẫn chưa từng chạy trên browser thật |
 | Bề mặt bảo mật nở ra trước khi M4 kịp làm | xem mục M4 dưới đây; đây là hệ quả trực tiếp |
 | ~~Kênh Ask chưa có trong spec declarative~~ ✅ đã khai | nó không dùng attribute nào nên không thuộc spec — nhưng phải nói rõ điều đó, nếu không người đọc tưởng mình đọc thiếu. Đã thêm vào spec §1.2 ngày 09/09 |
 | M2.5 bị đẩy lùi năm tuần | chỉ số ③ (§3.3) vì vậy vẫn chưa có điểm đo nào |
@@ -350,7 +350,7 @@ Không thuộc milestone nào; ghi ra để không rơi.
 | Chọn phần tử theo `livemcp-arg` | `TODO(M3)` trong `content/index.ts` | M3 |
 | Ranh giới "ngoài phạm vi v1" chưa khai trong spec: contenteditable/rich-text (IME, định dạng), drag-and-drop thật, slider tuỳ chế | [R07] câu 2 | **khai ngay ở M1.5** — ranh giới khai ra là *quyết định*, không khai là *lỗ hổng chờ người dùng phát hiện* (N2) |
 | Kiến trúc §5.5 còn ghi "SW chờ ong tới nơi rồi mới dispatch" | [R04] câu 3 | sửa khi đến M5, ghi rõ là đảo ngược có chủ đích |
-| Kênh Ask & transport HTTP **chưa có ca E2E nào** | mục ghi lùi ở §3 | ưu tiên cao nhất trong bảng này. Ít nhất một ca: trả lời về **đúng lúc tab đang F5** (đường `ask_hello`) — đây là loại lỗi chỉ browser thật mới thấy, và là lý do cơ chế đó tồn tại. Widget thuần giao diện thì không test |
+| Kênh Ask: **đã có** `07-ask` (2026-09-09) — còn thiếu ca **tab F5 giữa lúc câu trả lời bay về** (đường `ask_hello`), và transport HTTP vẫn chưa có ca E2E nào | mục ghi lùi ở §3 | ca F5 là lý do `ask_hello` tồn tại mà chưa lần nào bị thử. `07-ask` đã phủ: đi trọn vòng, `ask_wait` chặn thật, đường bôi đen, và câu trả lời render thật trong closed shadow root |
 | `--http-no-auth` chỉ được bảo vệ bằng một dòng cảnh báo | kiến trúc §2.5 | đủ cho hôm nay vì chỉ chủ dự án dùng. Trước khi mời ai khác: bắt buộc khai một cờ thứ hai, hoặc từ chối chạy nếu không có bằng chứng có hạ tầng chắn phía trước |
 | Giá trị option của `select`/`radio` **chưa qua** `toAgentText()` | M1.5, `parser/schema.ts` | M4. Đây là giá trị định danh phải khớp chính xác với trang **và** với `validateArgs`, nên làm sạch một phía sẽ khiến agent gửi giá trị đã sửa rồi bị chính ta từ chối. Chỗ đúng để chuẩn hoá là content script, tức phải sửa cả hai đầu cùng lúc. |
 
