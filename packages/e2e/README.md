@@ -59,6 +59,7 @@ extension, dù cả hai đều nói CDP.
 | `05-gaps` | những chỗ **chưa** hỗ trợ, ghi bằng `test.fixme` |
 | `06-dynamic` | tool sinh ra từ DOM mới; đợi bằng `livemcp-wait`; `livemcp-state` kẹt không treo agent |
 | `07-ask` | kênh Ask đi trọn vòng, `ask_wait` chặn thật, và **đo độ trễ** từng chặng |
+| `08-ask-offline` | server tắt thì widget **nói ra**, không quay vòng vô nghĩa; alarm hồi phục đúng tên và nhịp |
 
 Khẳng định đáng giá nhất trong `01` là một khẳng định **âm**: sau khi điền xong,
 không tồn tại sự kiện tương tác nào có `isTrusted === false`. Nó bắt được cái

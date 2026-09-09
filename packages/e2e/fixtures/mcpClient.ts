@@ -39,6 +39,7 @@ export class McpAgent {
   private notifyWaiters: Array<{ method: string; resolve: () => void }> = [];
   /** stderr của server, giữ lại để khi test đỏ còn biết server nói gì. */
   readonly serverLog: string[] = [];
+  private running = false;
 
   constructor(serverEntry: string, wsPort: number) {
     this.serverEntry = serverEntry;
@@ -47,6 +48,7 @@ export class McpAgent {
   }
 
   private spawnServer(): void {
+    this.running = true;
     this.proc = spawn(
       process.execPath,
       [this.serverEntry, '--stdio', '--ws-port', String(this.wsPort)],
@@ -71,13 +73,42 @@ export class McpAgent {
    * Giữ nguyên danh tính đối tượng để fixture không phải thay agent giữa chừng.
    */
   async restart(): Promise<void> {
+    this.stopServer();
+    await new Promise((r) => setTimeout(r, 500));
+    await this.startServer();
+  }
+
+  /**
+   * Giết server nhưng GIỮ đối tượng agent.
+   *
+   * Tách khỏi `restart()` vì có bài test cần đúng cái khoảng ở giữa: quãng thời
+   * gian server đã tắt mà trình duyệt vẫn mở. Đó là lúc extension phải nói cho
+   * người dùng biết mình đang nói vào khoảng không — và trước bản vá, đó đúng là
+   * lúc nó im lặng.
+   */
+  stopServer(): void {
     this.proc.kill();
-    for (const slot of this.pending.values()) slot.reject(new Error('server bị khởi động lại'));
+    this.running = false;
+    for (const slot of this.pending.values()) slot.reject(new Error('server đã bị tắt'));
     this.pending.clear();
     this.nextId = 1;
-    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  /** Dựng lại trên cùng cổng, như thể người dùng bật server lên lại. */
+  async startServer(): Promise<void> {
     this.spawnServer();
     await this.initialize();
+  }
+
+  /**
+   * Server có đang chạy không.
+   *
+   * Để `finally` của bài test dựng lại server mà không dựng chồng: một bài cố ý
+   * tắt server và đỏ giữa chừng sẽ để server nằm chết, kéo mọi bài sau đỏ theo
+   * vì lý do không liên quan — che mất lỗi thật.
+   */
+  get alive(): boolean {
+    return this.running;
   }
 
   private onLine(line: string): void {
@@ -189,6 +220,7 @@ export class McpAgent {
   }
 
   async close(): Promise<void> {
+    this.running = false;
     this.proc.kill();
     await new Promise((r) => setTimeout(r, 100));
   }
