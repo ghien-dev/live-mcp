@@ -40,6 +40,44 @@ const link = new ServerLink(
 link.connect();
 
 /**
+ * Nhịp đập giữ đường dây tự hồi phục — mảnh còn thiếu của cơ chế nối lại.
+ *
+ * `ServerLink` hẹn giờ nối lại bằng `setTimeout`, và điều đó ĐỦ chừng nào service
+ * worker còn sống. Nhưng MV3 giết SW sau ~30 giây rảnh, và timer chết theo nó.
+ * Nên khi server tắt đủ lâu, chuỗi sự việc là:
+ *
+ *   thất bại → hẹn thử lại sau 10s → Chrome giết SW → **không còn gì đánh thức**
+ *
+ * Extension nằm im vô thời hạn dù server đã sống lại từ lâu. Trước bản vá này,
+ * thứ duy nhất cứu được nó là `tabs.onActivated` — tức là người dùng phải tình
+ * cờ chuyển tab. Đó chính là hiện tượng "nối được rồi lại mất" mà không ai giải
+ * thích nổi, vì nó phụ thuộc vào thao tác không liên quan.
+ *
+ * Alarm sống ở tầng browser chứ không sống trong SW, nên nó vẫn kêu sau khi SW
+ * đã bị giết — và tiếng kêu đó dựng SW dậy. Một phút là nhịp đủ nhanh để người
+ * dùng không kịp bực, và là mức tối thiểu Chrome cho phép ở bản phát hành.
+ */
+const RECONNECT_ALARM = 'livemcp-reconnect';
+
+// Kiểm trước khi tạo, đừng tạo vô điều kiện: `create` với tên đã có sẽ ĐẶT LẠI
+// đồng hồ từ đầu. Mà đoạn này chạy mỗi lần SW thức dậy, nên một trang hay gửi
+// message sẽ liên tục đẩy mốc kêu ra xa và alarm không bao giờ tới — hỏng đúng
+// theo kiểu im lặng mà bản vá này sinh ra để diệt.
+void chrome.alarms.get(RECONNECT_ALARM).then((existing) => {
+  if (!existing) chrome.alarms.create(RECONNECT_ALARM, { periodInMinutes: 1 });
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== RECONNECT_ALARM) return;
+  // Đã nối rồi thì `connect()` tự thoát sớm, nhưng kiểm ở đây cho rõ ý: nhịp này
+  // chỉ để hồi phục, không phải để giữ SW sống mãi.
+  if (!link.connected) link.connect();
+});
+
+/** Chrome vừa khởi động: nối ngay, đừng bắt người dùng đợi hết một nhịp alarm. */
+chrome.runtime.onStartup.addListener(() => link.connect());
+
+/**
  * Báo trạng thái đường dây cho widget ở MỌI tab.
  *
  * Phát cho mọi tab chứ không chỉ tab trong `sites`: widget chạy khắp nơi, còn

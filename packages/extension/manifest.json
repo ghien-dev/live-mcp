@@ -39,7 +39,8 @@
     "debugger",
     "tabs",
     "storage",
-    "notifications"
+    "notifications",
+    "alarms"
   ],
   "host_permissions": [
     "http://*/*",
