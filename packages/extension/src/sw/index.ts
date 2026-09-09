@@ -28,11 +28,31 @@ import type { PopupToSw, PopupStatus } from '../messages.js';
 /** Tab đang có site chuẩn Live MCP. Mất khi SW bị kill → xin resync lúc dậy lại. */
 const sites = new Map<number, PageInfo>();
 
-const link = new ServerLink(handleServerMessage, () => {
-  // Vừa (re)connect: khai lại toàn bộ site đang mở để server dựng lại tool list.
-  void resyncAllTabs();
-});
+const link = new ServerLink(
+  handleServerMessage,
+  () => {
+    // Vừa (re)connect: khai lại toàn bộ site đang mở để server dựng lại tool list.
+    void resyncAllTabs();
+    void broadcastLink(true);
+  },
+  () => void broadcastLink(false),
+);
 link.connect();
+
+/**
+ * Báo trạng thái đường dây cho widget ở MỌI tab.
+ *
+ * Phát cho mọi tab chứ không chỉ tab trong `sites`: widget chạy khắp nơi, còn
+ * `sites` chỉ chứa trang có khai báo declarative. Tab nào không có widget thì
+ * `sendMessage` fail và bị nuốt — rẻ hơn nhiều so với việc SW phải ghi sổ xem
+ * tab nào đang có widget, thứ mà MV3 sẽ xoá sạch mỗi lần nó bị kill.
+ */
+async function broadcastLink(connected: boolean): Promise<void> {
+  const tabs = await chrome.tabs.query({}).catch(() => []);
+  for (const tab of tabs) {
+    if (tab.id !== undefined) void toAsk(tab.id, { type: 'sw_ask_link', connected });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Content script → SW
@@ -77,6 +97,13 @@ chrome.runtime.onMessage.addListener((msg: PopupToSw, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener((msg: AskContentToSw, sender) => {
   const tabId = sender.tab?.id;
   if (tabId === undefined || !msg?.type?.startsWith('cs_ask_')) return;
+
+  // Widget hỏi/chào lúc nào cũng là dịp để nói thẳng đường dây đang thế nào.
+  // Không đợi tới lần đổi trạng thái kế tiếp: MV3 vừa giết SW xong thì lần mở
+  // socket gần nhất đã trôi qua từ đời nào, widget không nghe được nó.
+  if (msg.type === 'cs_ask_send' || msg.type === 'cs_ask_hello') {
+    void toAsk(tabId, { type: 'sw_ask_link', connected: link.connected });
+  }
 
   switch (msg.type) {
     case 'cs_ask_send':

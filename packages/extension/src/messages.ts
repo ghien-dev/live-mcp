@@ -138,6 +138,16 @@ export type AskContentToSw =
 export type AskSwToContent =
   /** Phím tắt Alt+A — mở panel và kéo theo đoạn đang bôi đen, nếu có. */
   | { type: 'sw_ask_open' }
+  /**
+   * Trạng thái đường dây tới Local Server.
+   *
+   * Không có message này thì widget mù: `link.send()` khi chưa nối được **không
+   * báo lỗi** — nó xếp câu hỏi vào outbox rồi thử nối lại trong im lặng. Người
+   * dùng vì vậy nhìn thấy cùng một vòng xoay cho ba tình huống khác hẳn nhau
+   * ("chưa ai trực", "không nối được server", "widget đã chết"), và sau 90 giây
+   * còn bị chỉ sang claude.ai đúng lúc lỗi nằm ở máy mình. Đây là N2.
+   */
+  | { type: 'sw_ask_link'; connected: boolean }
   | { type: 'sw_ask_claimed'; questionId: string }
   | { type: 'sw_ask_answer'; questionId: string; markdown: string }
   | { type: 'sw_ask_followup'; questionId: string; text: string }

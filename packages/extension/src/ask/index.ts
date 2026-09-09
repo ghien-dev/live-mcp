@@ -46,6 +46,23 @@ let open = false;
 let unread = false;
 let pendingSelection = '';
 
+/**
+ * Đường dây SW → Local Server. `null` = chưa nghe SW nói gì lần nào.
+ *
+ * Ba giá trị chứ không phải hai: lúc widget vừa dựng mà SW còn đang ngủ thì
+ * chưa biết gì cả, và nói bừa "mất kết nối" lúc đó là báo động giả.
+ */
+let linkOk: boolean | null = null;
+
+/**
+ * Widget này thuộc một bản extension đã bị gỡ khỏi bộ nhớ (reload/cập nhật).
+ *
+ * Nó vẫn hiện, vẫn gõ được, nhưng mọi thứ gửi đi đều rơi vào hư không — content
+ * script cũ không còn cầu nối nào tới SW. Chỉ F5 mới cứu được, nên phải nói ra
+ * đúng câu đó thay vì để người dùng ngồi nhìn vòng xoay.
+ */
+let contextDead = false;
+
 let root: HTMLDivElement;
 let shadow: ShadowRoot;
 let askChip: HTMLButtonElement | null = null;
@@ -111,10 +128,44 @@ function saveThread(): void {
   void chrome.storage.local.set({ [THREAD_KEY]: thread.slice(-THREAD_LIMIT) });
 }
 
+/**
+ * Gửi cho SW. Không được nuốt lỗi im lặng — đó chính là lỗi đã bắt được lúc
+ * dùng thử thật: extension vừa build lại, widget cũ vẫn hiện, người dùng hỏi và
+ * ngồi nhìn vòng xoay mãi mãi vì `sendMessage` ném lỗi rồi bị `.catch(() => {})`
+ * nuốt gọn.
+ *
+ * Vẫn không để lỗi nổ ra console của trang chủ nhà — nhưng thay vì vứt đi, ta
+ * ghi nhận nó thành trạng thái hiển thị được.
+ */
 function send(msg: AskContentToSw): void {
-  // SW có thể đang ngủ, hoặc extension vừa reload — nuốt lỗi, đừng để một
-  // "Unchecked runtime.lastError" nổ vào console của trang chủ nhà.
-  void chrome.runtime.sendMessage(msg).catch(() => {});
+  const dead = () => {
+    if (contextDead) return;
+    contextDead = true;
+    render();
+  };
+
+  /**
+   * Reject KHÔNG đủ để kết luận widget đã chết: SW đang ngủ dậy cũng reject một
+   * nhịp. Dấu hiệu chắc chắn là `chrome.runtime.id` biến mất — context bị gỡ thì
+   * chính đối tượng `chrome.runtime` cũng không còn dùng được nữa.
+   */
+  const onFail = () => {
+    let alive = false;
+    try {
+      alive = Boolean(chrome.runtime?.id);
+    } catch {
+      alive = false;
+    }
+    if (!alive) dead();
+  };
+
+  try {
+    // Ném ĐỒNG BỘ khi context đã chết, reject khi SW không nhận — bắt cả hai
+    // đường, chỉ chừa một là lỗi lọt qua im lặng y như cũ.
+    void chrome.runtime.sendMessage(msg).catch(onFail);
+  } catch {
+    dead();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +182,16 @@ function handleServer(msg: AskSwToContent): void {
     unread = false;
     render();
     focusInput();
+    return;
+  }
+
+  if (msg.type === 'sw_ask_link') {
+    // Nghe được SW nói nghĩa là cầu nối còn sống — gỡ luôn nghi ngờ "widget đã
+    // chết" nếu trước đó có một lần gửi trượt vì SW đang ngủ.
+    contextDead = false;
+    if (linkOk === msg.connected) return;
+    linkOk = msg.connected;
+    render();
     return;
   }
 
@@ -283,8 +344,43 @@ function renderThread(): HTMLElement {
   return list;
 }
 
+/**
+ * Vì sao hàm này dài hơn vẻ ngoài của nó: bốn tình huống dưới đây trước kia
+ * hiện ra y hệt nhau — một vòng xoay và câu "đang chờ một phiên Claude". Ba
+ * trong bốn tình huống đó KHÔNG phải đang chờ Claude, và hai cái cần người dùng
+ * ra tay thì mới xong. Gộp chúng lại là kiểu hỏng im lặng mà N2 cấm.
+ */
 function renderStatus(item: ThreadItem): HTMLElement {
   const row = el('div', 'lmx-status');
+
+  // 1. Widget mồ côi: không spinner, vì không có gì đang chạy để mà quay.
+  if (contextDead) {
+    row.dataset.tone = 'warn';
+    row.append(
+      el(
+        'span',
+        undefined,
+        'Extension vừa được nạp lại nên widget này đã cũ — câu hỏi không gửi đi được. ' +
+          'Tải lại trang (F5) rồi hỏi lại.',
+      ),
+    );
+    return row;
+  }
+
+  // 2. Chưa nối được server: câu hỏi đang nằm chờ trong trình duyệt, chưa hề rời máy.
+  if (linkOk === false) {
+    row.dataset.tone = 'warn';
+    row.append(
+      el(
+        'span',
+        undefined,
+        'Chưa nối được Local Server, câu hỏi đang xếp hàng trong trình duyệt. ' +
+          'Kiểm tra server đã chạy chưa; token thì dán ở popup extension.',
+      ),
+    );
+    return row;
+  }
+
   row.append(el('span', 'lmx-spin'));
 
   if (item.status === 'claimed') {

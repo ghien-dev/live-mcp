@@ -64,6 +64,12 @@ export class ServerLink {
   constructor(
     private readonly onMessage: (msg: ServerToExtensionMsg) => void,
     private readonly onOpen: () => void,
+    /**
+     * Mất kết nối. Tách khỏi `onOpen` vì hai đầu này phục vụ hai việc khác nhau:
+     * mở thì phải khai lại site, còn đóng thì phải nói cho người dùng biết —
+     * widget không có cách nào tự đoán ra là nó đang nói vào khoảng không.
+     */
+    private readonly onClose: () => void = () => {},
   ) {}
 
   get connected(): boolean {
@@ -123,6 +129,7 @@ export class ServerLink {
 
     socket.onclose = (event) => {
       this.socket = null;
+      this.onClose();
       if (this.closed) return;
 
       if (event.code === CLOSE_POLICY_VIOLATION) {
